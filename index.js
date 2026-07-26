@@ -27,7 +27,7 @@
   "use strict";
 
   const MOD_ID = "com.nilsmeier.crossing-tph-override";
-  const MOD_VERSION = "3.0.0";
+  const MOD_VERSION = "3.1.0";
   const TAG = "[BahnübergangTPH]";
   const STORAGE_KEY = "limits";
 
@@ -254,6 +254,102 @@
     return changed;
   }
 
+  // --------------------------------------------------------------------------
+  //  Diagnose: Warum erzeugt das Spiel (k)einen Bahnübergang?
+  // --------------------------------------------------------------------------
+
+  /**
+   * Vergleicht einen Zugtyp, der im Vanilla-Spiel Bahnübergänge erzeugt
+   * (z. B. s-train / regional), mit den neu freigeschalteten Metro-Typen und
+   * gibt alle Unterschiede aus. Zusätzlich werden die Spielkonstanten nach
+   * Bahnübergangs-Einträgen durchsucht.
+   *
+   * Rein lesend – ändert nichts am Spielstand.
+   */
+  function dumpDiagnostics() {
+    const out = { trainTypeDiff: {}, crossingConstants: {}, trackSample: null };
+
+    let trainTypes = {};
+    try {
+      trainTypes = api.trains.getTrainTypes() || {};
+    } catch (err) {
+      console.error(`${TAG} Diagnose: Zugtypen nicht lesbar:`, err);
+    }
+
+    // Referenz = ein Zugtyp, der ursprünglich kreuzen durfte.
+    let referenceId = null;
+    for (const id of Object.keys(trainTypes)) {
+      const orig = originals[id];
+      if (orig && crossedOriginally(orig)) {
+        referenceId = id;
+        break;
+      }
+    }
+
+    if (referenceId) {
+      const ref = trainTypes[referenceId];
+      const refKeys = Object.keys(ref || {});
+      for (const id of METRO_TRAIN_IDS) {
+        const t = trainTypes[id];
+        if (!t) continue;
+        const diff = {};
+        const allKeys = new Set(refKeys.concat(Object.keys(t)));
+        for (const k of allKeys) {
+          const a = JSON.stringify(ref ? ref[k] : undefined);
+          const b = JSON.stringify(t[k]);
+          if (a !== b) diff[k] = { [referenceId]: ref ? ref[k] : undefined, [id]: t[k] };
+        }
+        out.trainTypeDiff[id] = diff;
+      }
+      out.trainTypeDiff.__reference = referenceId;
+    } else {
+      out.trainTypeDiff.__reference = "kein kreuzender Vanilla-Zugtyp gefunden";
+    }
+
+    // Spielkonstanten nach Bahnübergangs-Einträgen durchsuchen.
+    try {
+      const constants = api.utils.getConstants() || {};
+      for (const k of Object.keys(constants)) {
+        if (/cross|grade|road|tph|barrier/i.test(k)) {
+          out.crossingConstants[k] = constants[k];
+        }
+      }
+    } catch (err) {
+      console.warn(`${TAG} Diagnose: Konstanten nicht lesbar:`, err);
+    }
+
+    // Ein gebautes Gleis anschauen: gibt es dort Bahnübergangs-Felder?
+    try {
+      const tracks = api.gameState.getTracks() || [];
+      if (tracks.length) {
+        out.trackSample = { keys: Object.keys(tracks[0]), example: tracks[0] };
+        const crossingTracks = tracks.filter(function (t) {
+          return Object.keys(t).some(function (k) {
+            return /cross|grade|road/i.test(k);
+          });
+        });
+        out.trackSample.tracksWithCrossingFields = crossingTracks.length;
+      } else {
+        out.trackSample = "keine Gleise gebaut";
+      }
+    } catch (err) {
+      console.warn(`${TAG} Diagnose: Gleise nicht lesbar:`, err);
+    }
+
+    console.log(`${TAG} ===== DIAGNOSE BAHNÜBERGANG =====`);
+    console.log(out);
+    try {
+      // Zum Kopieren als Text bereitstellen.
+      window.__bahnuebergangDiagnose = out;
+      console.log(
+        `${TAG} Als Text kopieren mit:  copy(JSON.stringify(window.__bahnuebergangDiagnose, null, 2))`
+      );
+    } catch (e) {
+      /* optional */
+    }
+    return out;
+  }
+
   /** Namen der aktuell betroffenen Zugtypen. */
   function affectedTrainNames() {
     return lastSummary.map(function (s) {
@@ -466,6 +562,21 @@
           { style: { display: "flex", gap: "8px", marginTop: "10px" } },
           h(ButtonComp, { onClick: apply }, "Anwenden"),
           h(ButtonComp, { onClick: resetToVanilla, variant: "outline" }, "Zurücksetzen")
+        ),
+        h(
+          "div",
+          { style: { marginTop: "8px" } },
+          h(
+            ButtonComp,
+            {
+              variant: "ghost",
+              onClick: function () {
+                dumpDiagnostics();
+                setStatus("Diagnose in die Konsole geschrieben (F12).");
+              },
+            },
+            "Diagnose in Konsole"
+          )
         ),
         status
           ? h(
