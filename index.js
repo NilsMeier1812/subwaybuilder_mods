@@ -14,62 +14,49 @@
  * verboten. Dieser Mod liest diese Werte zur Laufzeit aus und ersetzt sie
  * über `api.trains.modifyTrainType()`.
  *
- * API-Referenz:
- *   - api.trains.getTrainTypes()               -> Record<id, TrainType>
- *   - api.trains.modifyTrainType(id, updates)  -> Teil-Update eines Zugtyps
+ * Die Werte werden direkt im Spiel über Zahlenfelder eingegeben
+ * (Einstellungen-Menü bzw. schwebendes Panel) und dauerhaft gespeichert.
  */
 
 (function () {
   "use strict";
 
   const MOD_ID = "com.nilsmeier.crossing-tph-override";
-  const MOD_VERSION = "1.0.0";
+  const MOD_VERSION = "2.0.0";
   const TAG = "[BahnübergangTPH]";
+  const STORAGE_KEY = "limits";
 
   // ==========================================================================
-  //  KONFIGURATION  —  hier die gewünschten Werte einstellen
+  //  STARTWERTE  —  Züge pro Stunde je Straßenklasse
+  //  (im Spiel änderbar; gespeicherte Werte haben Vorrang)
+  //  null oder 0 = ebenerdiger Übergang an dieser Straßenklasse verboten
   // ==========================================================================
-  const CONFIG = {
-    // Modus, wie die bestehenden Limits ersetzt werden:
-    //   "multiply"  -> bestehende Limits mit `multiplier` multiplizieren
-    //   "set"       -> feste Werte aus `values` verwenden
-    //   "unlimited" -> Limit praktisch aufheben (Wert = `unlimitedValue`)
-    mode: "multiply",
+  const LIMITS = {
+    highway: null, // Autobahn / Schnellstraße (Vanilla: verboten)
+    major: 30, // Hauptstraße (Vanilla: 6)
+    medium: 40, // Sammelstraße (Vanilla: 8)
+    minor: 60, // Nebenstraße (Vanilla: 10)
+  };
 
-    // Für mode === "multiply": Faktor, mit dem jedes bestehende Limit
-    // multipliziert wird (z. B. 3 = dreifache Kapazität).
-    multiplier: 3,
-
-    // Für mode === "set": feste Grenzen (Züge/Stunde) je Straßenklasse.
-    // `null` = Übergang an dieser Straßenklasse bleibt verboten.
-    values: {
-      highway: null,
-      major: 30,
-      medium: 40,
-      minor: 60,
-    },
-
-    // Für mode === "unlimited": Wert, der als "quasi unbegrenzt" gesetzt wird.
-    unlimitedValue: 999,
-
-    // Wenn true, wird auch an Autobahnen/Highways (Standard: verboten = null)
-    // ein Übergang erlaubt. Der dann verwendete Wert richtet sich nach dem
-    // gewählten Modus (multiply nutzt highwayBaseValue als Ausgangswert).
-    allowHighwayCrossing: false,
-
-    // Ausgangswert für Highways, falls allowHighwayCrossing im "multiply"-Modus
-    // aktiv ist und aktuell kein Wert (null) hinterlegt ist.
-    highwayBaseValue: 4,
-
-    // Wenn true, werden auch Zugtypen bearbeitet, die aktuell KEIN Crossing-
-    // Limit besitzen (z. B. reine U-Bahnen). Standard: false — es werden nur
-    // Zugtypen angefasst, die ohnehin Straßen ebenerdig kreuzen dürfen.
+  // Zusätzliche Optionen
+  const OPTIONS = {
+    // Auch Zugtypen anfassen, die aktuell gar keine Straßen kreuzen dürfen
+    // (z. B. reine U-Bahnen). Standard: aus.
     applyToAllTrains: false,
   };
-  // ==========================================================================
 
-  // Fallback-Standardwerte, falls ein Zugtyp (noch) kein Limit-Objekt hat,
-  // aber Straßen kreuzen darf. Entspricht den Vanilla-Werten des Spiels.
+  // Anzeigenamen der Straßenklassen für die Oberfläche
+  const ROAD_LABELS = {
+    highway: "Autobahn / Schnellstraße",
+    major: "Hauptstraße",
+    medium: "Sammelstraße",
+    minor: "Nebenstraße",
+  };
+
+  // Reihenfolge in der Oberfläche
+  const ROAD_ORDER = ["highway", "major", "medium", "minor"];
+
+  // Vanilla-Standardwerte als Rückfallebene
   const DEFAULT_LIMIT = { highway: null, major: 6, medium: 8, minor: 10 };
 
   const api = window.SubwayBuilderAPI;
@@ -79,6 +66,10 @@
   }
 
   console.log(`${TAG} v${MOD_VERSION} | API v${api.version}`);
+
+  // Originalwerte je Zugtyp, damit "Zurücksetzen" die Vanilla-Werte
+  // wiederherstellen kann. Wird beim allerersten Auslesen befüllt.
+  const originalLimits = {};
 
   // --------------------------------------------------------------------------
   //  Hilfsfunktionen
@@ -98,76 +89,45 @@
     for (const k of known) {
       if (trainType && Object.prototype.hasOwnProperty.call(trainType, k)) return k;
     }
-    // Heuristik: irgendein Key, der nach "grade crossing tph" aussieht.
     if (trainType) {
       for (const k of Object.keys(trainType)) {
         if (/grade.*cross.*tph|crossing.*tph/i.test(k)) return k;
       }
     }
-    return "gradeCrossingTphLimit"; // Standard, falls nichts gefunden
+    return "gradeCrossingTphLimit";
   }
 
-  /** Prüft, ob ein Wert ein sinnvolles Limit-Objekt ist. */
   function isLimitObject(v) {
     return v && typeof v === "object" && !Array.isArray(v);
   }
 
-  /** Darf dieser Zugtyp aktuell Straßen ebenerdig kreuzen? */
+  /** Darf dieser Zugtyp Straßen ebenerdig kreuzen? */
   function canCross(trainType, currentLimit) {
     if (trainType && trainType.allowAtGradeRoadCrossing === true) return true;
     if (isLimitObject(currentLimit)) return true;
     return false;
   }
 
-  /**
-   * Berechnet ein neues Limit-Objekt aus dem bestehenden.
-   * Unbekannte/zusätzliche Straßenklassen werden ebenfalls berücksichtigt.
-   */
-  function computeNewLimit(current) {
-    const base = isLimitObject(current) ? current : DEFAULT_LIMIT;
-    const result = {};
-
-    for (const roadClass of Object.keys(base)) {
-      const oldVal = base[roadClass];
-      const isHighway = roadClass === "highway";
-
-      // Highways bleiben verboten, außer der Nutzer erlaubt sie ausdrücklich.
-      if (isHighway && !CONFIG.allowHighwayCrossing) {
-        result[roadClass] = null;
-        continue;
-      }
-
-      if (CONFIG.mode === "unlimited") {
-        result[roadClass] = CONFIG.unlimitedValue;
-      } else if (CONFIG.mode === "set") {
-        // Bei "set" nehmen wir den konfigurierten Wert; fehlt einer, behalten
-        // wir den alten Wert bei.
-        const setVal = CONFIG.values[roadClass];
-        result[roadClass] = setVal === undefined ? oldVal : setVal;
-      } else {
-        // "multiply"
-        let start = oldVal;
-        if (isHighway && (start === null || start === undefined)) {
-          start = CONFIG.highwayBaseValue;
-        }
-        if (typeof start === "number") {
-          result[roadClass] = Math.max(1, Math.round(start * CONFIG.multiplier));
-        } else {
-          result[roadClass] = start; // null/undefined unverändert lassen
-        }
-      }
-    }
-
-    return result;
+  /** Wandelt eine Eingabe in einen Limit-Wert (Zahl oder null). */
+  function normalizeValue(raw) {
+    if (raw === null || raw === undefined || raw === "") return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return null; // 0 / ungültig = gesperrt
+    return Math.round(n);
   }
 
   // --------------------------------------------------------------------------
-  //  Kernlogik: Überschreiben aller relevanten Zugtypen
+  //  Kernlogik
   // --------------------------------------------------------------------------
 
   let lastSummary = [];
 
-  function applyOverrides(reason) {
+  /**
+   * Wendet die aktuellen LIMITS auf alle passenden Zugtypen an.
+   * @param {string} reason  Nur für die Konsolenausgabe.
+   * @param {boolean} restoreOriginal  true = Vanilla-Werte wiederherstellen.
+   */
+  function applyOverrides(reason, restoreOriginal) {
     let trainTypes;
     try {
       trainTypes = api.trains.getTrainTypes();
@@ -184,44 +144,272 @@
       const key = resolveCrossingKey(trainType);
       const current = trainType ? trainType[key] : undefined;
 
-      if (!CONFIG.applyToAllTrains && !canCross(trainType, current)) {
+      // Originalwerte einmalig sichern (vor der ersten Änderung).
+      if (!(id in originalLimits)) {
+        originalLimits[id] = isLimitObject(current)
+          ? Object.assign({}, current)
+          : current === undefined
+            ? undefined
+            : current;
+      }
+
+      if (!OPTIONS.applyToAllTrains && !canCross(trainType, originalLimits[id])) {
         continue; // Zugtyp kreuzt keine Straßen -> überspringen
       }
 
-      const newLimit = computeNewLimit(current);
+      let newLimit;
+      if (restoreOriginal) {
+        const orig = originalLimits[id];
+        newLimit = isLimitObject(orig) ? Object.assign({}, orig) : DEFAULT_LIMIT;
+      } else {
+        // Basis: bestehende Struktur, damit unbekannte Straßenklassen erhalten
+        // bleiben. Konfigurierte Klassen werden überschrieben.
+        const base = isLimitObject(current)
+          ? current
+          : isLimitObject(originalLimits[id])
+            ? originalLimits[id]
+            : DEFAULT_LIMIT;
+
+        newLimit = {};
+        for (const roadClass of Object.keys(base)) {
+          newLimit[roadClass] = base[roadClass];
+        }
+        for (const roadClass of Object.keys(LIMITS)) {
+          newLimit[roadClass] = normalizeValue(LIMITS[roadClass]);
+        }
+      }
 
       try {
         api.trains.modifyTrainType(id, { [key]: newLimit });
         changed++;
-        summary.push({ id, name: (trainType && trainType.name) || id, before: current, after: newLimit });
+        summary.push({
+          id: id,
+          name: (trainType && trainType.name) || id,
+          before: current,
+          after: newLimit,
+        });
       } catch (err) {
         console.error(`${TAG} Fehler beim Ändern von Zugtyp "${id}":`, err);
       }
     }
 
     lastSummary = summary;
-    console.log(
-      `${TAG} ${reason}: ${changed} Zugtyp(en) angepasst (Modus: ${CONFIG.mode}).`,
-      summary
-    );
+    console.log(`${TAG} ${reason}: ${changed} Zugtyp(en) angepasst.`, summary);
     return changed;
   }
 
-  /** Kurze, menschenlesbare Zusammenfassung für Benachrichtigungen. */
-  function summaryText() {
-    if (!lastSummary.length) return "Keine kreuzenden Zugtypen gefunden.";
-    return lastSummary
-      .map((s) => {
-        const a = s.after || {};
-        const parts = Object.keys(a).map((k) => `${k}:${a[k] === null ? "–" : a[k]}`);
-        return `${s.name} → ${parts.join(", ")}`;
-      })
-      .join("\n");
+  /** Namen der aktuell betroffenen Zugtypen. */
+  function affectedTrainNames() {
+    return lastSummary.map(function (s) {
+      return s.name;
+    });
   }
 
   // --------------------------------------------------------------------------
-  //  Benutzeroberfläche (best-effort, bricht den Mod bei Fehlern nicht ab)
+  //  Speichern / Laden
   // --------------------------------------------------------------------------
+
+  function saveSettings() {
+    try {
+      const p = api.storage.set(MOD_ID + "." + STORAGE_KEY, {
+        limits: LIMITS,
+        options: OPTIONS,
+      });
+      if (p && typeof p.catch === "function") {
+        p.catch(function (err) {
+          console.warn(`${TAG} Speichern fehlgeschlagen:`, err);
+        });
+      }
+    } catch (err) {
+      console.warn(`${TAG} Speichern fehlgeschlagen:`, err);
+    }
+  }
+
+  let settingsPromise = null;
+
+  function loadSettings() {
+    if (settingsPromise) return settingsPromise;
+    settingsPromise = (async function () {
+      try {
+        const saved = await api.storage.get(MOD_ID + "." + STORAGE_KEY, null);
+        if (saved && typeof saved === "object") {
+          if (saved.limits && typeof saved.limits === "object") {
+            for (const k of Object.keys(saved.limits)) {
+              LIMITS[k] = saved.limits[k];
+            }
+          }
+          if (saved.options && typeof saved.options === "object") {
+            for (const k of Object.keys(saved.options)) {
+              OPTIONS[k] = saved.options[k];
+            }
+          }
+          console.log(`${TAG} Gespeicherte Werte geladen:`, LIMITS);
+        }
+      } catch (err) {
+        // storage ist im Browser ein No-Op – kein Fehlerfall.
+        console.warn(`${TAG} Keine gespeicherten Werte geladen:`, err);
+      }
+    })();
+    return settingsPromise;
+  }
+
+  // --------------------------------------------------------------------------
+  //  Oberfläche: Zahleneingabe je Straßenklasse
+  // --------------------------------------------------------------------------
+
+  const React = api.utils && api.utils.React;
+  const gameComponents = (api.utils && api.utils.components) || {};
+  const h = React ? React.createElement : null;
+
+  /** Erzeugt das Einstellungs-Panel als React-Komponente. */
+  function createPanel() {
+    if (!React) return null;
+
+    const InputComp = gameComponents.Input || "input";
+    const ButtonComp = gameComponents.Button || "button";
+
+    return function CrossingTphPanel() {
+      // Eingaben als Text halten, damit man frei tippen kann.
+      const initial = {};
+      for (const rc of ROAD_ORDER) {
+        const v = LIMITS[rc];
+        initial[rc] = v === null || v === undefined ? "" : String(v);
+      }
+
+      const [draft, setDraft] = React.useState(initial);
+      const [status, setStatus] = React.useState("");
+      const [allTrains, setAllTrains] = React.useState(OPTIONS.applyToAllTrains);
+
+      function setField(roadClass, value) {
+        // Nur Ziffern zulassen (leer = gesperrt).
+        const clean = String(value).replace(/[^0-9]/g, "");
+        setDraft(function (prev) {
+          return Object.assign({}, prev, { [roadClass]: clean });
+        });
+      }
+
+      function apply() {
+        for (const rc of ROAD_ORDER) {
+          LIMITS[rc] = normalizeValue(draft[rc]);
+        }
+        OPTIONS.applyToAllTrains = allTrains;
+        saveSettings();
+        const n = applyOverrides("Über Panel angewendet", false);
+        const names = affectedTrainNames();
+        setStatus(
+          n > 0
+            ? `${n} Zugtyp(en) angepasst: ${names.join(", ")}`
+            : "Keine passenden Zugtypen gefunden."
+        );
+        try {
+          api.ui.showNotification(
+            `Bahnübergang-Limit gesetzt (${n} Zugtypen).`,
+            n > 0 ? "success" : "warning"
+          );
+        } catch (e) {
+          /* Benachrichtigung ist optional */
+        }
+      }
+
+      function resetToVanilla() {
+        const n = applyOverrides("Auf Vanilla zurückgesetzt", true);
+        // Eingabefelder auf die Originalwerte des ersten betroffenen Zugtyps
+        // setzen, damit man sieht, was Vanilla war.
+        const firstOrig = lastSummary.length ? lastSummary[0].after : DEFAULT_LIMIT;
+        const next = {};
+        for (const rc of ROAD_ORDER) {
+          const v = firstOrig ? firstOrig[rc] : DEFAULT_LIMIT[rc];
+          next[rc] = v === null || v === undefined ? "" : String(v);
+        }
+        setDraft(next);
+        for (const rc of ROAD_ORDER) {
+          LIMITS[rc] = normalizeValue(next[rc]);
+        }
+        saveSettings();
+        setStatus(`Vanilla-Werte wiederhergestellt (${n} Zugtypen).`);
+        try {
+          api.ui.showNotification("Bahnübergang-Limit zurückgesetzt.", "info");
+        } catch (e) {
+          /* optional */
+        }
+      }
+
+      const rows = ROAD_ORDER.map(function (rc) {
+        return h(
+          "div",
+          {
+            key: rc,
+            style: {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "8px",
+              marginBottom: "6px",
+            },
+          },
+          h("span", { style: { fontSize: "13px" } }, ROAD_LABELS[rc] || rc),
+          h(InputComp, {
+            type: "text",
+            inputMode: "numeric",
+            value: draft[rc],
+            placeholder: "gesperrt",
+            onChange: function (e) {
+              setField(rc, e && e.target ? e.target.value : e);
+            },
+            style: {
+              width: "80px",
+              textAlign: "right",
+              padding: "2px 6px",
+            },
+          })
+        );
+      });
+
+      return h(
+        "div",
+        { style: { padding: "10px", minWidth: "260px" } },
+        h(
+          "div",
+          { style: { fontSize: "12px", opacity: 0.75, marginBottom: "8px" } },
+          "Züge pro Stunde je Straßenklasse. Leer oder 0 = Übergang gesperrt."
+        ),
+        rows,
+        h(
+          "label",
+          {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              fontSize: "12px",
+              margin: "10px 0",
+            },
+          },
+          h("input", {
+            type: "checkbox",
+            checked: allTrains,
+            onChange: function (e) {
+              setAllTrains(e.target.checked);
+            },
+          }),
+          "Auf alle Zugtypen anwenden (auch nicht-kreuzende)"
+        ),
+        h(
+          "div",
+          { style: { display: "flex", gap: "8px" } },
+          h(ButtonComp, { onClick: apply }, "Anwenden"),
+          h(ButtonComp, { onClick: resetToVanilla, variant: "outline" }, "Zurücksetzen")
+        ),
+        status
+          ? h(
+              "div",
+              { style: { fontSize: "11px", opacity: 0.75, marginTop: "8px" } },
+              status
+            )
+          : null
+      );
+    };
+  }
 
   function safeUi(fn) {
     try {
@@ -232,50 +420,45 @@
   }
 
   function setupUi() {
-    // Knopf: Limits neu anwenden + Zusammenfassung anzeigen
-    safeUi(() =>
+    const Panel = createPanel();
+
+    if (Panel) {
+      // Im Einstellungen-Menü (dort gehören Mod-Optionen hin)
+      safeUi(function () {
+        api.ui.registerComponent("settings-menu", {
+          id: MOD_ID + ".panel",
+          component: Panel,
+        });
+      });
+
+      // Zusätzlich als verschiebbares Panel
+      safeUi(function () {
+        api.ui.addFloatingPanel({
+          id: MOD_ID + ".floating",
+          title: "Bahnübergang-Limit",
+          icon: "TrainFront",
+          defaultWidth: 300,
+          render: Panel,
+        });
+      });
+    } else {
+      console.warn(`${TAG} React nicht verfügbar – Zahlenfelder werden nicht angezeigt.`);
+    }
+
+    // Knopf im Escape-Menü: Werte erneut anwenden
+    safeUi(function () {
       api.ui.addButton("escape-menu", {
         id: MOD_ID + ".apply",
         label: "Bahnübergang-Limit anwenden",
-        onClick: () => {
-          const n = applyOverrides("Manuell ausgelöst");
+        onClick: function () {
+          const n = applyOverrides("Manuell ausgelöst", false);
           api.ui.showNotification(
-            `Bahnübergang-Limit aktualisiert (${n} Zugtypen).\n${summaryText()}`,
+            `Bahnübergang-Limit angewendet (${n} Zugtypen).`,
             "success"
           );
         },
-      })
-    );
-
-    // Schieberegler: Multiplikator (wirkt im Modus "multiply")
-    safeUi(() =>
-      api.ui.addSlider("settings-menu", {
-        id: MOD_ID + ".multiplier",
-        label: "Bahnübergang-Limit ×Faktor",
-        min: 1,
-        max: 20,
-        step: 1,
-        defaultValue: CONFIG.multiplier,
-        onChange: (value) => {
-          CONFIG.multiplier = value;
-          CONFIG.mode = "multiply";
-          applyOverrides(`Faktor auf ${value} gesetzt`);
-        },
-      })
-    );
-
-    // Umschalter: Limit komplett aufheben
-    safeUi(() =>
-      api.ui.addToggle("settings-menu", {
-        id: MOD_ID + ".unlimited",
-        label: "Bahnübergang-Limit aufheben",
-        defaultValue: CONFIG.mode === "unlimited",
-        onChange: (enabled) => {
-          CONFIG.mode = enabled ? "unlimited" : "multiply";
-          applyOverrides(enabled ? "Limit aufgehoben" : "Faktor-Modus");
-        },
-      })
-    );
+      });
+    });
   }
 
   // --------------------------------------------------------------------------
@@ -285,29 +468,37 @@
   let uiReady = false;
 
   function init(reason) {
-    applyOverrides(reason);
-    if (!uiReady) {
-      uiReady = true;
-      setupUi();
-    }
+    loadSettings().then(function () {
+      applyOverrides(reason, false);
+      if (!uiReady) {
+        uiReady = true;
+        setupUi();
+      }
+    });
   }
 
   // Beim Spielstart und bei jedem Städtewechsel neu anwenden, da Zugtypen
   // dabei (neu) initialisiert werden können.
   try {
-    api.hooks.onGameInit(() => init("onGameInit"));
+    api.hooks.onGameInit(function () {
+      init("onGameInit");
+    });
   } catch (err) {
     console.warn(`${TAG} onGameInit-Hook nicht verfügbar:`, err);
   }
 
   try {
-    api.hooks.onCityLoad((cityCode) => init(`onCityLoad(${cityCode})`));
+    api.hooks.onCityLoad(function (cityCode) {
+      init("onCityLoad(" + cityCode + ")");
+    });
   } catch (err) {
     console.warn(`${TAG} onCityLoad-Hook nicht verfügbar:`, err);
   }
 
   try {
-    api.hooks.onMapReady(() => init("onMapReady"));
+    api.hooks.onMapReady(function () {
+      init("onMapReady");
+    });
   } catch (err) {
     console.warn(`${TAG} onMapReady-Hook nicht verfügbar:`, err);
   }

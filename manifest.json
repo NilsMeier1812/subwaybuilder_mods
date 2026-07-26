@@ -1,8 +1,8 @@
 {
   "id": "com.nilsmeier.crossing-tph-override",
   "name": "Bahnübergang-Limit Override",
-  "description": "Überschreibt das Züge-pro-Stunde-Limit (gradeCrossingTphLimit) an Bahnübergängen für alle Zugtypen. Werte frei konfigurierbar oder Limit komplett aufheben.",
-  "version": "1.0.0",
+  "description": "Überschreibt das Züge-pro-Stunde-Limit (gradeCrossingTphLimit) an Bahnübergängen für alle Zugtypen. Werte je Straßenklasse direkt im Spiel per Zahleneingabe einstellbar.",
+  "version": "2.0.0",
   "author": {
     "name": "Nils Meier"
   },
