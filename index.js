@@ -1,35 +1,33 @@
 /**
- * Bahnübergang-Limit Override
- * ----------------------------
- * Subway Builder Mod mit zwei Funktionen:
+ * Bahnübergang-Mod für Subway Builder
+ * -----------------------------------
+ *  1. Schaltet echte Bahnübergänge für Heavy Metro und Light Metro frei.
+ *  2. Überschreibt das Limit "Züge pro Stunde" (tph) an Bahnübergängen.
  *
- *  1. Überschreibt das Limit "Züge pro Stunde" (tph) an Bahnübergängen.
- *  2. Erlaubt Zugtypen, die das im Spiel nicht dürfen (Heavy Metro,
- *     Light Metro), Straßen ebenerdig zu kreuzen.
+ * Hintergrund — das Spiel führt fünf relevante Eigenschaften je Zugtyp:
  *
- * Hintergrund: Jeder Zugtyp hat die Eigenschaft `allowAtGradeRoadCrossing`
- * (Alias `canCrossRoads`), die bestimmt, ob er Straßen ebenerdig kreuzen darf.
- * Bei Heavy/Light Metro steht sie auf `false`. Zusätzlich gibt es
- * `gradeCrossingTphLimit` — eine Obergrenze (kombinierte Fahrtrichtungen,
- * Züge/Stunde) je Straßenklasse:
+ *   allowGradeCrossing              erzeugt einen echten Bahnübergang
+ *   allowAtGradeRoadCrossing        erlaubt das Queren der Straße überhaupt
+ *   gradeCrossingTphLimit           Züge/Stunde je Straßenklasse
+ *   gradeCrossingBaseCost           Baukosten je Übergang
+ *   gradeCrossingMaintenancePerDay  laufende Kosten je Übergang
  *
- *     gradeCrossingTphLimit: { highway: null, major: 6, medium: 8, minor: 10 }
+ * Bei Heavy/Light Metro stehen beide Flags auf `false` und die Kostenfelder
+ * fehlen ganz. Setzt man nur `allowAtGradeRoadCrossing`, quert das Gleis die
+ * Straße zwar, es entsteht aber kein Bahnübergang. Deshalb setzt der Mod alle
+ * fünf Eigenschaften und übernimmt die Kosten von einem Zugtyp, der im
+ * Vanilla-Spiel bereits Übergänge baut (Commuter Rail).
  *
- * `null` bedeutet: an dieser Straßenklasse ist ein ebenerdiger Übergang
- * verboten. Der Mod liest beides zur Laufzeit aus und ersetzt es über
- * `api.trains.modifyTrainType()`.
- *
- * Alle Werte werden direkt im Spiel über Zahlenfelder eingegeben
- * (Einstellungen-Menü bzw. schwebendes Panel) und dauerhaft gespeichert.
+ * Alle Werte werden im Spiel über Zahlenfelder eingegeben und dauerhaft
+ * gespeichert.
  */
 
 (function () {
   "use strict";
 
   const MOD_ID = "com.nilsmeier.crossing-tph-override";
-  const MOD_VERSION = "3.2.0";
+  const MOD_VERSION = "4.0.0";
   const TAG = "[BahnübergangTPH]";
-  const STORAGE_KEY = "limits";
 
   // ==========================================================================
   //  STARTWERTE  —  Züge pro Stunde je Straßenklasse
@@ -37,52 +35,60 @@
   //  null oder 0 = ebenerdiger Übergang an dieser Straßenklasse verboten
   // ==========================================================================
   const LIMITS = {
-    highway: null, // Autobahn / Schnellstraße (Vanilla: verboten)
-    major: 30, // Hauptstraße (Vanilla: 6)
-    medium: 40, // Sammelstraße (Vanilla: 8)
-    minor: 60, // Nebenstraße (Vanilla: 10)
+    highway: null, // Autobahn / Schnellstraße
+    major: 30, // Hauptstraße
+    medium: 40, // Sammelstraße
+    minor: 60, // Nebenstraße
+  };
+
+  // Kosten für neu freigeschaltete Übergänge.
+  // null = automatisch vom Vanilla-Kreuzer (Commuter Rail) übernehmen.
+  const COSTS = {
+    baseCost: null, // Baukosten je Übergang
+    maintenancePerDay: null, // laufende Kosten je Übergang und Tag
   };
 
   const OPTIONS = {
-    // Heavy Metro und Light Metro dürfen Straßen ebenerdig kreuzen.
-    // Im Vanilla-Spiel ist das verboten.
+    // Heavy Metro und Light Metro bekommen echte Bahnübergänge.
     enableMetroCrossing: true,
-
-    // Jeder Zugtyp darf Straßen ebenerdig kreuzen (auch Intercity o. Ä.).
+    // Jeder Zugtyp bekommt echte Bahnübergänge.
     enableCrossingForAllTrains: false,
   };
 
   // Zugtypen, die per "enableMetroCrossing" freigeschaltet werden.
   const METRO_TRAIN_IDS = ["heavy-metro", "light-metro"];
 
-  // Zugtypen, die im Vanilla-Spiel Straßen kreuzen dürfen (Referenz für die
-  // Diagnose und für die Erkennung des Originalzustands).
-  const VANILLA_CROSSING_IDS = ["s-train", "regional", "tram", "commuter-rail"];
+  // Alle Eigenschaften rund um Bahnübergänge. Diese werden gesichert,
+  // überschrieben und beim Zurücksetzen wiederhergestellt.
+  const CROSSING_PROPS = [
+    "allowGradeCrossing",
+    "allowAtGradeRoadCrossing",
+    "gradeCrossingTphLimit",
+    "gradeCrossingBaseCost",
+    "gradeCrossingMaintenancePerDay",
+  ];
+
+  // Notfall-Werte, falls kein Vanilla-Kreuzer gefunden wird.
+  const FALLBACK_BASE_COST = 300000;
+  const FALLBACK_MAINTENANCE = 5000;
 
   /**
-   * Bekannter Vanilla-Zustand für Zugtypen, die der Mod verändert.
+   * Bekannter Vanilla-Zustand für die Zugtypen, die der Mod verändert.
    * Nötig, weil der Mod beim Neuladen (Strg+Umschalt+R) sonst den bereits
-   * veränderten Zustand als "Original" sichern würde – dann könnte
-   * "Zurücksetzen" die echten Werte nicht mehr herstellen.
+   * veränderten Zustand als "Original" sichern würde.
    */
   const VANILLA_KNOWN = {
-    "heavy-metro": { allow: false, limit: undefined },
-    "light-metro": { allow: false, limit: undefined },
+    "heavy-metro": { allowGradeCrossing: false, allowAtGradeRoadCrossing: false },
+    "light-metro": { allowGradeCrossing: false, allowAtGradeRoadCrossing: false },
   };
 
-  // Anzeigenamen der Straßenklassen für die Oberfläche
   const ROAD_LABELS = {
     highway: "Autobahn / Schnellstraße",
     major: "Hauptstraße",
     medium: "Sammelstraße",
     minor: "Nebenstraße",
   };
-
-  // Reihenfolge in der Oberfläche
   const ROAD_ORDER = ["highway", "major", "medium", "minor"];
-
-  // Vanilla-Standardwerte als Rückfallebene
-  const DEFAULT_LIMIT = { highway: null, major: 6, medium: 8, minor: 10 };
 
   const api = window.SubwayBuilderAPI;
   if (!api) {
@@ -92,56 +98,14 @@
 
   console.log(`${TAG} v${MOD_VERSION} | API v${api.version}`);
 
-  /**
-   * Originalzustand je Zugtyp, damit "Zurücksetzen" die Vanilla-Werte
-   * wiederherstellen kann. Wird beim allerersten Auslesen befüllt.
-   * Form: { limitKey, limit, allowKey, allow, hasAliasKey }
-   */
+  /** Originalzustand je Zugtyp: { id -> { prop: wert } }. */
   const originals = {};
-
-  /** Aus api.storage geladene Originalwerte (überleben das Mod-Neuladen). */
   let storedOriginals = null;
   let newOriginalsToPersist = false;
 
   // --------------------------------------------------------------------------
   //  Hilfsfunktionen
   // --------------------------------------------------------------------------
-
-  /**
-   * Findet den Namen der Crossing-Limit-Eigenschaft an einem Zugtyp.
-   * Standardname ist `gradeCrossingTphLimit`, wir tolerieren aber auch leichte
-   * Schreibvarianten, damit der Mod robust gegenüber Spielversionen bleibt.
-   */
-  function resolveLimitKey(trainType) {
-    const known = [
-      "gradeCrossingTphLimit",
-      "gradeCrossingTPHLimit",
-      "gradeCrossingTphLimits",
-    ];
-    for (const k of known) {
-      if (trainType && Object.prototype.hasOwnProperty.call(trainType, k)) return k;
-    }
-    if (trainType) {
-      for (const k of Object.keys(trainType)) {
-        if (/grade.*cross.*tph|crossing.*tph/i.test(k)) return k;
-      }
-    }
-    return "gradeCrossingTphLimit";
-  }
-
-  /**
-   * Findet den Namen der "darf kreuzen"-Eigenschaft. Offiziell heißt sie
-   * `allowAtGradeRoadCrossing`, ältere/andere Builds nutzen `canCrossRoads`.
-   */
-  function resolveAllowKey(trainType) {
-    if (trainType && Object.prototype.hasOwnProperty.call(trainType, "allowAtGradeRoadCrossing")) {
-      return "allowAtGradeRoadCrossing";
-    }
-    if (trainType && Object.prototype.hasOwnProperty.call(trainType, "canCrossRoads")) {
-      return "canCrossRoads";
-    }
-    return "allowAtGradeRoadCrossing";
-  }
 
   function isLimitObject(v) {
     return v && typeof v === "object" && !Array.isArray(v);
@@ -155,76 +119,86 @@
     return Math.round(n);
   }
 
+  /** Wandelt eine Kosten-Eingabe um ("" = automatisch übernehmen). */
+  function normalizeCost(raw) {
+    if (raw === null || raw === undefined || raw === "") return null;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return Math.round(n);
+  }
+
   /**
    * Sichert den Originalzustand eines Zugtyps genau einmal.
-   *
-   * Wichtig: Beim Mod-Neuladen sind die Zugtypen eventuell schon verändert.
-   * Deshalb gilt die Reihenfolge:
-   *   1. bereits gespeicherter Originalzustand (aus api.storage)
-   *   2. bekannter Vanilla-Zustand (VANILLA_KNOWN)
-   *   3. aktueller Zustand des Zugtyps
+   * Reihenfolge: gespeichert -> bekannt -> aktuell.
    */
   function captureOriginal(id, trainType) {
     if (id in originals) return originals[id];
 
-    const limitKey = resolveLimitKey(trainType);
-    const allowKey = resolveAllowKey(trainType);
-    const hasAliasKey =
-      trainType && Object.prototype.hasOwnProperty.call(trainType, "canCrossRoads");
-
-    // 1. Aus dem Speicher wiederhergestellt?
     if (storedOriginals && storedOriginals[id]) {
-      const s = storedOriginals[id];
-      originals[id] = {
-        limitKey: s.limitKey || limitKey,
-        allowKey: s.allowKey || allowKey,
-        limit: s.limit,
-        allow: s.allow,
-        hasAliasKey: s.hasAliasKey === undefined ? hasAliasKey : s.hasAliasKey,
-        source: "storage",
-      };
+      originals[id] = Object.assign({}, storedOriginals[id]);
       return originals[id];
     }
 
-    // 2. Bekannter Vanilla-Zustand für die vom Mod veränderten Zugtypen.
+    const snapshot = {};
     if (VANILLA_KNOWN[id]) {
-      originals[id] = {
-        limitKey: limitKey,
-        allowKey: allowKey,
-        limit: VANILLA_KNOWN[id].limit,
-        allow: VANILLA_KNOWN[id].allow,
-        hasAliasKey: hasAliasKey,
-        source: "known",
-      };
-      newOriginalsToPersist = true;
-      return originals[id];
+      // Bekannter Vanilla-Zustand; alle übrigen Eigenschaften fehlen dort.
+      for (const p of CROSSING_PROPS) {
+        snapshot[p] = VANILLA_KNOWN[id][p];
+      }
+    } else {
+      for (const p of CROSSING_PROPS) {
+        const v = trainType ? trainType[p] : undefined;
+        snapshot[p] = isLimitObject(v) ? Object.assign({}, v) : v;
+      }
+      // Ältere Builds nennen das Flag `canCrossRoads`.
+      if (
+        snapshot.allowAtGradeRoadCrossing === undefined &&
+        trainType &&
+        Object.prototype.hasOwnProperty.call(trainType, "canCrossRoads")
+      ) {
+        snapshot.allowAtGradeRoadCrossing = trainType.canCrossRoads;
+      }
     }
 
-    // 3. Aktueller Zustand (unveränderter Zugtyp).
-    const limit = trainType ? trainType[limitKey] : undefined;
-    originals[id] = {
-      limitKey: limitKey,
-      allowKey: allowKey,
-      limit: isLimitObject(limit) ? Object.assign({}, limit) : limit,
-      allow: trainType ? trainType[allowKey] : undefined,
-      hasAliasKey: hasAliasKey,
-      source: "live",
-    };
+    originals[id] = snapshot;
     newOriginalsToPersist = true;
-    return originals[id];
+    return snapshot;
   }
 
-  /** Durfte dieser Zugtyp im Original bereits Straßen kreuzen? */
+  /** Baute dieser Zugtyp im Original bereits echte Bahnübergänge? */
   function crossedOriginally(orig) {
-    return orig.allow === true || isLimitObject(orig.limit);
+    return (
+      orig.allowGradeCrossing === true ||
+      orig.allowAtGradeRoadCrossing === true ||
+      isLimitObject(orig.gradeCrossingTphLimit)
+    );
   }
 
-  /** Soll dieser Zugtyp nach aktueller Konfiguration kreuzen dürfen? */
+  /** Soll dieser Zugtyp nach aktueller Konfiguration Übergänge bauen? */
   function shouldCross(id, orig) {
     if (crossedOriginally(orig)) return true;
     if (OPTIONS.enableCrossingForAllTrains) return true;
     if (OPTIONS.enableMetroCrossing && METRO_TRAIN_IDS.indexOf(id) !== -1) return true;
     return false;
+  }
+
+  /**
+   * Sucht einen Zugtyp, der im Vanilla-Spiel echte Bahnübergänge baut.
+   * Dessen Kosten dienen als Vorlage für neu freigeschaltete Zugtypen.
+   */
+  function findVanillaCrossingTemplate(trainTypes) {
+    for (const id of Object.keys(trainTypes)) {
+      const orig = originals[id];
+      if (orig && orig.allowGradeCrossing === true) {
+        return {
+          id: id,
+          baseCost: orig.gradeCrossingBaseCost,
+          maintenancePerDay: orig.gradeCrossingMaintenancePerDay,
+          tphLimit: orig.gradeCrossingTphLimit,
+        };
+      }
+    }
+    return null;
   }
 
   // --------------------------------------------------------------------------
@@ -248,48 +222,78 @@
     }
     if (!trainTypes) return 0;
 
+    // Erst alle Originale sichern, dann die Kostenvorlage bestimmen.
+    for (const [id, trainType] of Object.entries(trainTypes)) {
+      captureOriginal(id, trainType);
+    }
+    const template = findVanillaCrossingTemplate(trainTypes);
+
+    const baseCost =
+      COSTS.baseCost !== null
+        ? COSTS.baseCost
+        : template && template.baseCost !== undefined
+          ? template.baseCost
+          : FALLBACK_BASE_COST;
+
+    const maintenance =
+      COSTS.maintenancePerDay !== null
+        ? COSTS.maintenancePerDay
+        : template && template.maintenancePerDay !== undefined
+          ? template.maintenancePerDay
+          : FALLBACK_MAINTENANCE;
+
     const summary = [];
     let changed = 0;
 
     for (const [id, trainType] of Object.entries(trainTypes)) {
-      const orig = captureOriginal(id, trainType);
-      const current = trainType ? trainType[orig.limitKey] : undefined;
-
-      const update = {};
-      let newLimit;
-      let newAllow;
+      const orig = originals[id];
+      let update;
 
       if (restoreOriginal) {
-        newLimit = isLimitObject(orig.limit) ? Object.assign({}, orig.limit) : orig.limit;
-        newAllow = orig.allow;
-        // Zugtypen, die nie angefasst wurden, überspringen.
-        if (newLimit === undefined && newAllow === undefined) continue;
+        // Nur Zugtypen anfassen, an denen wir überhaupt etwas verändert haben.
+        const touched = CROSSING_PROPS.some(function (p) {
+          return orig[p] !== undefined;
+        });
+        if (!touched && !crossedOriginally(orig)) continue;
+
+        update = {};
+        for (const p of CROSSING_PROPS) {
+          update[p] = isLimitObject(orig[p]) ? Object.assign({}, orig[p]) : orig[p];
+        }
       } else {
         if (!shouldCross(id, orig)) continue;
 
-        // Basis: bestehende Struktur, damit unbekannte Straßenklassen erhalten
-        // bleiben. Konfigurierte Klassen werden überschrieben.
+        // Limit-Objekt: bestehende Struktur erhalten, konfigurierte Klassen
+        // überschreiben. So bleiben unbekannte Straßenklassen unangetastet.
+        const current = trainType ? trainType.gradeCrossingTphLimit : undefined;
         const base = isLimitObject(current)
           ? current
-          : isLimitObject(orig.limit)
-            ? orig.limit
-            : DEFAULT_LIMIT;
+          : isLimitObject(orig.gradeCrossingTphLimit)
+            ? orig.gradeCrossingTphLimit
+            : template && isLimitObject(template.tphLimit)
+              ? template.tphLimit
+              : { highway: null, major: null, medium: null, minor: null };
 
-        newLimit = {};
+        const newLimit = {};
         for (const roadClass of Object.keys(base)) {
           newLimit[roadClass] = base[roadClass];
         }
         for (const roadClass of Object.keys(LIMITS)) {
           newLimit[roadClass] = normalizeValue(LIMITS[roadClass]);
         }
-        newAllow = true;
+
+        update = {
+          allowGradeCrossing: true,
+          allowAtGradeRoadCrossing: true,
+          gradeCrossingTphLimit: newLimit,
+          gradeCrossingBaseCost: baseCost,
+          gradeCrossingMaintenancePerDay: maintenance,
+        };
       }
 
-      update[orig.limitKey] = newLimit;
-      update[orig.allowKey] = newAllow;
-      // Falls der Build beide Schreibweisen kennt, beide setzen.
-      if (orig.hasAliasKey && orig.allowKey !== "canCrossRoads") {
-        update.canCrossRoads = newAllow;
+      // Ältere Builds nennen das Flag `canCrossRoads` – dann mitschreiben.
+      if (trainType && Object.prototype.hasOwnProperty.call(trainType, "canCrossRoads")) {
+        update.canCrossRoads = update.allowAtGradeRoadCrossing;
       }
 
       try {
@@ -299,8 +303,10 @@
           id: id,
           name: (trainType && trainType.name) || id,
           newlyEnabled: !restoreOriginal && !crossedOriginally(orig),
-          before: current,
-          after: newLimit,
+          crossing: update.allowGradeCrossing,
+          limit: update.gradeCrossingTphLimit,
+          baseCost: update.gradeCrossingBaseCost,
+          maintenancePerDay: update.gradeCrossingMaintenancePerDay,
         });
       } catch (err) {
         console.error(`${TAG} Fehler beim Ändern von Zugtyp "${id}":`, err);
@@ -309,7 +315,12 @@
 
     lastSummary = summary;
     persistOriginals();
-    console.log(`${TAG} ${reason}: ${changed} Zugtyp(en) angepasst.`, summary);
+    console.log(
+      `${TAG} ${reason}: ${changed} Zugtyp(en) angepasst` +
+        (template ? ` (Kostenvorlage: ${template.id})` : " (keine Kostenvorlage gefunden)") +
+        ".",
+      summary
+    );
     return changed;
   }
 
@@ -323,7 +334,7 @@
     }
     storedOriginals = merged;
     try {
-      const p = api.storage.set(MOD_ID + ".originals", merged);
+      const p = api.storage.set(MOD_ID + ".originals.v2", merged);
       if (p && typeof p.catch === "function") {
         p.catch(function (err) {
           console.warn(`${TAG} Originalwerte konnten nicht gespeichert werden:`, err);
@@ -334,28 +345,18 @@
     }
   }
 
+  function affectedTrainNames() {
+    return lastSummary.map(function (s) {
+      return s.newlyEnabled ? s.name + " (neu)" : s.name;
+    });
+  }
+
   // --------------------------------------------------------------------------
-  //  Diagnose: Warum erzeugt das Spiel (k)einen Bahnübergang?
+  //  Diagnose (rein lesend)
   // --------------------------------------------------------------------------
 
-  /**
-   * Vergleicht einen Zugtyp, der im Vanilla-Spiel Bahnübergänge erzeugt
-   * (z. B. s-train / regional), mit den neu freigeschalteten Metro-Typen und
-   * gibt alle Unterschiede aus. Zusätzlich werden die Spielkonstanten nach
-   * Bahnübergangs-Einträgen durchsucht.
-   *
-   * Rein lesend – ändert nichts am Spielstand.
-   */
   function dumpDiagnostics() {
-    const out = {
-      trainTypeIds: [],
-      crossingCapableTypes: {},
-      metroVsVanillaDiff: {},
-      crossingConstants: {},
-      mapLayers: {},
-      apiCrossingEntries: [],
-      trackSample: null,
-    };
+    const out = { trainTypes: {}, crossingConstants: {}, trackSample: null };
 
     let trainTypes = {};
     try {
@@ -363,145 +364,36 @@
     } catch (err) {
       console.error(`${TAG} Diagnose: Zugtypen nicht lesbar:`, err);
     }
-    out.trainTypeIds = Object.keys(trainTypes);
 
-    // Alle Zugtypen: welche tragen Kreuzungs-Eigenschaften?
     for (const [id, t] of Object.entries(trainTypes)) {
       if (!t) continue;
-      const entry = {};
-      for (const k of Object.keys(t)) {
-        if (/cross|grade|road/i.test(k)) entry[k] = t[k];
-      }
-      if (t.stats) {
-        for (const k of Object.keys(t.stats)) {
-          if (/cross|grade|road|tph/i.test(k)) entry["stats." + k] = t.stats[k];
-        }
-      }
-      out.crossingCapableTypes[id] = entry;
+      const entry = { jetzt: {}, original: originals[id] || "nicht erfasst" };
+      for (const p of CROSSING_PROPS) entry.jetzt[p] = t[p];
+      out.trainTypes[id] = entry;
     }
 
-    // Gezielt gegen einen echten Vanilla-Kreuzer vergleichen (nicht gegen
-    // einen vom Mod veränderten Zugtyp).
-    let referenceId = null;
-    for (const cand of VANILLA_CROSSING_IDS) {
-      if (trainTypes[cand]) {
-        referenceId = cand;
-        break;
-      }
-    }
-
-    if (referenceId) {
-      const ref = trainTypes[referenceId];
-      for (const id of METRO_TRAIN_IDS) {
-        const t = trainTypes[id];
-        if (!t) continue;
-        const diff = {};
-        const allKeys = new Set(Object.keys(ref || {}).concat(Object.keys(t)));
-        for (const k of allKeys) {
-          // Reine Zahlenwerte/Optik sind für Bahnübergänge irrelevant.
-          if (k === "stats" || k === "appearance" || k === "description") continue;
-          const a = JSON.stringify(ref ? ref[k] : undefined);
-          const b = JSON.stringify(t[k]);
-          if (a !== b) diff[k] = { [referenceId]: ref ? ref[k] : undefined, [id]: t[k] };
-        }
-        out.metroVsVanillaDiff[id] = diff;
-      }
-      out.metroVsVanillaDiff.__reference = referenceId;
-    } else {
-      out.metroVsVanillaDiff.__reference =
-        "kein Vanilla-Kreuzer vorhanden (gesucht: " + VANILLA_CROSSING_IDS.join(", ") + ")";
-    }
-
-    // Spielkonstanten nach Bahnübergangs-Einträgen durchsuchen.
     try {
       const constants = api.utils.getConstants() || {};
-      out.crossingConstants.__allKeys = Object.keys(constants);
       for (const k of Object.keys(constants)) {
-        if (/cross|grade|road|tph|barrier/i.test(k)) {
-          out.crossingConstants[k] = constants[k];
-        }
+        if (/cross|grade|road|tph|street/i.test(k)) out.crossingConstants[k] = constants[k];
       }
     } catch (err) {
       console.warn(`${TAG} Diagnose: Konstanten nicht lesbar:`, err);
     }
 
-    // Kartenebenen: rendert das Spiel Bahnübergänge als eigene Ebene?
-    try {
-      const map = api.utils.getMap();
-      if (map && typeof map.getStyle === "function") {
-        const style = map.getStyle() || {};
-        const layers = style.layers || [];
-        out.mapLayers.matching = layers
-          .filter(function (l) {
-            return /cross|grade|barrier|gate|signal/i.test(l.id);
-          })
-          .map(function (l) {
-            return { id: l.id, type: l.type, source: l.source, sourceLayer: l["source-layer"] };
-          });
-        out.mapLayers.allLayerIds = layers.map(function (l) {
-          return l.id;
-        });
-        out.mapLayers.sourceIds = Object.keys(style.sources || {});
-
-        // Falls es eine Crossing-Ebene gibt: ein paar Features anschauen.
-        const first = out.mapLayers.matching[0];
-        if (first && typeof map.querySourceFeatures === "function") {
-          try {
-            const feats = map.querySourceFeatures(first.source, {
-              sourceLayer: first.sourceLayer,
-            });
-            out.mapLayers.sampleFeatures = feats.slice(0, 5).map(function (f) {
-              return f.properties;
-            });
-            out.mapLayers.featureCount = feats.length;
-          } catch (e) {
-            out.mapLayers.sampleFeatures = "nicht abfragbar: " + e.message;
-          }
-        }
-      } else {
-        out.mapLayers = "Karte nicht verfügbar";
-      }
-    } catch (err) {
-      console.warn(`${TAG} Diagnose: Karte nicht lesbar:`, err);
-    }
-
-    // Gibt es irgendwo in der API einen Bahnübergangs-Einstieg?
-    try {
-      for (const ns of Object.keys(api)) {
-        if (/cross|grade/i.test(ns)) out.apiCrossingEntries.push(ns);
-        const v = api[ns];
-        if (v && typeof v === "object") {
-          for (const fn of Object.keys(v)) {
-            if (/cross|grade/i.test(fn)) out.apiCrossingEntries.push(ns + "." + fn);
-          }
-        }
-      }
-    } catch (err) {
-      console.warn(`${TAG} Diagnose: API nicht scanbar:`, err);
-    }
-
-    // Ein gebautes Gleis anschauen: gibt es dort Bahnübergangs-Felder?
     try {
       const tracks = api.gameState.getTracks() || [];
-      if (tracks.length) {
-        // Bevorzugt ein oberirdisches Gleis zeigen (dort entstünde ein Übergang).
-        const atGrade = tracks.filter(function (t) {
-          return t.startElevation > -3 && t.startElevation < 4.5;
-        });
-        out.trackSample = {
-          totalTracks: tracks.length,
-          atGradeTracks: atGrade.length,
-          keys: Object.keys(tracks[0]),
-          atGradeExample: atGrade.length ? atGrade[0] : null,
-        };
-        out.trackSample.tracksWithCrossingFields = tracks.filter(function (t) {
-          return Object.keys(t).some(function (k) {
-            return /cross|grade|road/i.test(k);
-          });
-        }).length;
-      } else {
-        out.trackSample = "keine Gleise gebaut";
-      }
+      const atGrade = tracks.filter(function (t) {
+        return t.startElevation > -3 && t.startElevation < 4.5;
+      });
+      out.trackSample = {
+        totalTracks: tracks.length,
+        atGradeTracks: atGrade.length,
+        atGradeByTrainType: atGrade.reduce(function (acc, t) {
+          acc[t.trackType] = (acc[t.trackType] || 0) + 1;
+          return acc;
+        }, {}),
+      };
     } catch (err) {
       console.warn(`${TAG} Diagnose: Gleise nicht lesbar:`, err);
     }
@@ -509,7 +401,6 @@
     console.log(`${TAG} ===== DIAGNOSE BAHNÜBERGANG =====`);
     console.log(out);
     try {
-      // Zum Kopieren als Text bereitstellen.
       window.__bahnuebergangDiagnose = out;
       console.log(
         `${TAG} Als Text kopieren mit:  copy(JSON.stringify(window.__bahnuebergangDiagnose, null, 2))`
@@ -520,21 +411,15 @@
     return out;
   }
 
-  /** Namen der aktuell betroffenen Zugtypen. */
-  function affectedTrainNames() {
-    return lastSummary.map(function (s) {
-      return s.newlyEnabled ? s.name + " (neu freigeschaltet)" : s.name;
-    });
-  }
-
   // --------------------------------------------------------------------------
   //  Speichern / Laden
   // --------------------------------------------------------------------------
 
   function saveSettings() {
     try {
-      const p = api.storage.set(MOD_ID + "." + STORAGE_KEY, {
+      const p = api.storage.set(MOD_ID + ".limits", {
         limits: LIMITS,
+        costs: COSTS,
         options: OPTIONS,
       });
       if (p && typeof p.catch === "function") {
@@ -553,25 +438,28 @@
     if (settingsPromise) return settingsPromise;
     settingsPromise = (async function () {
       try {
-        const savedOriginals = await api.storage.get(MOD_ID + ".originals", null);
+        const savedOriginals = await api.storage.get(MOD_ID + ".originals.v2", null);
         if (savedOriginals && typeof savedOriginals === "object") {
           storedOriginals = savedOriginals;
           console.log(`${TAG} Originalwerte aus Speicher geladen.`);
         }
 
-        const saved = await api.storage.get(MOD_ID + "." + STORAGE_KEY, null);
+        const saved = await api.storage.get(MOD_ID + ".limits", null);
         if (saved && typeof saved === "object") {
-          if (saved.limits && typeof saved.limits === "object") {
-            for (const k of Object.keys(saved.limits)) {
-              LIMITS[k] = saved.limits[k];
+          if (saved.limits) {
+            for (const k of Object.keys(saved.limits)) LIMITS[k] = saved.limits[k];
+          }
+          if (saved.costs) {
+            for (const k of Object.keys(saved.costs)) {
+              if (k in COSTS) COSTS[k] = saved.costs[k];
             }
           }
-          if (saved.options && typeof saved.options === "object") {
+          if (saved.options) {
             for (const k of Object.keys(saved.options)) {
               if (k in OPTIONS) OPTIONS[k] = saved.options[k];
             }
           }
-          console.log(`${TAG} Gespeicherte Werte geladen:`, LIMITS, OPTIONS);
+          console.log(`${TAG} Gespeicherte Werte geladen:`, LIMITS, COSTS, OPTIONS);
         }
       } catch (err) {
         // storage ist im Browser ein No-Op – kein Fehlerfall.
@@ -589,14 +477,45 @@
   const gameComponents = (api.utils && api.utils.components) || {};
   const h = React ? React.createElement : null;
 
-  /** Erzeugt das Einstellungs-Panel als React-Komponente. */
   function createPanel() {
     if (!React) return null;
 
     const InputComp = gameComponents.Input || "input";
     const ButtonComp = gameComponents.Button || "button";
 
-    return function CrossingTphPanel() {
+    function numberField(value, onChange, placeholder) {
+      return h(InputComp, {
+        type: "text",
+        inputMode: "numeric",
+        value: value,
+        placeholder: placeholder,
+        onChange: function (e) {
+          onChange(
+            String(e && e.target ? e.target.value : e).replace(/[^0-9]/g, "")
+          );
+        },
+        style: { width: "110px", textAlign: "right", padding: "2px 6px" },
+      });
+    }
+
+    function row(label, control) {
+      return h(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "8px",
+            marginBottom: "6px",
+          },
+        },
+        h("span", { style: { fontSize: "13px" } }, label),
+        control
+      );
+    }
+
+    return function CrossingPanel() {
       const initial = {};
       for (const rc of ROAD_ORDER) {
         const v = LIMITS[rc];
@@ -604,21 +523,20 @@
       }
 
       const [draft, setDraft] = React.useState(initial);
-      const [status, setStatus] = React.useState("");
+      const [baseCost, setBaseCost] = React.useState(
+        COSTS.baseCost === null ? "" : String(COSTS.baseCost)
+      );
+      const [maint, setMaint] = React.useState(
+        COSTS.maintenancePerDay === null ? "" : String(COSTS.maintenancePerDay)
+      );
       const [metroCross, setMetroCross] = React.useState(OPTIONS.enableMetroCrossing);
       const [allCross, setAllCross] = React.useState(OPTIONS.enableCrossingForAllTrains);
-
-      function setField(roadClass, value) {
-        const clean = String(value).replace(/[^0-9]/g, "");
-        setDraft(function (prev) {
-          return Object.assign({}, prev, { [roadClass]: clean });
-        });
-      }
+      const [status, setStatus] = React.useState("");
 
       function apply() {
-        for (const rc of ROAD_ORDER) {
-          LIMITS[rc] = normalizeValue(draft[rc]);
-        }
+        for (const rc of ROAD_ORDER) LIMITS[rc] = normalizeValue(draft[rc]);
+        COSTS.baseCost = normalizeCost(baseCost);
+        COSTS.maintenancePerDay = normalizeCost(maint);
         OPTIONS.enableMetroCrossing = metroCross;
         OPTIONS.enableCrossingForAllTrains = allCross;
         saveSettings();
@@ -630,25 +548,16 @@
         );
         try {
           api.ui.showNotification(
-            `Bahnübergang-Limit gesetzt (${n} Zugtypen).`,
+            `Bahnübergänge aktualisiert (${n} Zugtypen).`,
             n > 0 ? "success" : "warning"
           );
         } catch (e) {
-          /* Benachrichtigung ist optional */
+          /* optional */
         }
       }
 
       function resetToVanilla() {
         const n = applyOverrides("Auf Vanilla zurückgesetzt", true);
-        const next = {};
-        for (const rc of ROAD_ORDER) {
-          const v = DEFAULT_LIMIT[rc];
-          next[rc] = v === null || v === undefined ? "" : String(v);
-        }
-        setDraft(next);
-        for (const rc of ROAD_ORDER) {
-          LIMITS[rc] = normalizeValue(next[rc]);
-        }
         setMetroCross(false);
         setAllCross(false);
         OPTIONS.enableMetroCrossing = false;
@@ -656,7 +565,7 @@
         saveSettings();
         setStatus(`Vanilla-Zustand wiederhergestellt (${n} Zugtypen).`);
         try {
-          api.ui.showNotification("Bahnübergang-Limit zurückgesetzt.", "info");
+          api.ui.showNotification("Bahnübergänge zurückgesetzt.", "info");
         } catch (e) {
           /* optional */
         }
@@ -685,54 +594,52 @@
         );
       }
 
-      const rows = ROAD_ORDER.map(function (rc) {
-        return h(
-          "div",
-          {
-            key: rc,
-            style: {
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "8px",
-              marginBottom: "6px",
-            },
-          },
-          h("span", { style: { fontSize: "13px" } }, ROAD_LABELS[rc] || rc),
-          h(InputComp, {
-            type: "text",
-            inputMode: "numeric",
-            value: draft[rc],
-            placeholder: "gesperrt",
-            onChange: function (e) {
-              setField(rc, e && e.target ? e.target.value : e);
-            },
-            style: {
-              width: "80px",
-              textAlign: "right",
-              padding: "2px 6px",
-            },
-          })
-        );
+      const separator = h("div", {
+        style: { height: "1px", background: "currentColor", opacity: 0.15, margin: "10px 0" },
       });
 
       return h(
         "div",
-        { style: { padding: "10px", minWidth: "280px" } },
+        { style: { padding: "10px", minWidth: "300px" } },
         h(
           "div",
           { style: { fontSize: "12px", opacity: 0.75, marginBottom: "8px" } },
           "Züge pro Stunde je Straßenklasse. Leer oder 0 = Übergang gesperrt."
         ),
-        rows,
-        h("div", { style: { height: "1px", background: "currentColor", opacity: 0.15, margin: "10px 0" } }),
+        ROAD_ORDER.map(function (rc) {
+          return h(
+            "div",
+            { key: rc },
+            row(
+              ROAD_LABELS[rc] || rc,
+              numberField(
+                draft[rc],
+                function (v) {
+                  setDraft(function (prev) {
+                    return Object.assign({}, prev, { [rc]: v });
+                  });
+                },
+                "gesperrt"
+              )
+            )
+          );
+        }),
+        separator,
         h(
           "div",
           { style: { fontSize: "12px", opacity: 0.75, marginBottom: "6px" } },
-          "Straßenquerung erlauben:"
+          "Kosten je Übergang (leer = wie Commuter Rail):"
         ),
-        checkbox("Heavy & Light Metro dürfen Straßen kreuzen", metroCross, setMetroCross),
-        checkbox("Alle Zugtypen dürfen Straßen kreuzen", allCross, setAllCross),
+        row("Baukosten", numberField(baseCost, setBaseCost, "automatisch")),
+        row("Unterhalt pro Tag", numberField(maint, setMaint, "automatisch")),
+        separator,
+        h(
+          "div",
+          { style: { fontSize: "12px", opacity: 0.75, marginBottom: "6px" } },
+          "Bahnübergänge freischalten:"
+        ),
+        checkbox("Heavy & Light Metro", metroCross, setMetroCross),
+        checkbox("Alle Zugtypen", allCross, setAllCross),
         h(
           "div",
           { style: { display: "flex", gap: "8px", marginTop: "10px" } },
@@ -755,11 +662,7 @@
           )
         ),
         status
-          ? h(
-              "div",
-              { style: { fontSize: "11px", opacity: 0.75, marginTop: "8px" } },
-              status
-            )
+          ? h("div", { style: { fontSize: "11px", opacity: 0.75, marginTop: "8px" } }, status)
           : null
       );
     };
@@ -777,21 +680,18 @@
     const Panel = createPanel();
 
     if (Panel) {
-      // Im Einstellungen-Menü (dort gehören Mod-Optionen hin)
       safeUi(function () {
         api.ui.registerComponent("settings-menu", {
           id: MOD_ID + ".panel",
           component: Panel,
         });
       });
-
-      // Zusätzlich als verschiebbares Panel
       safeUi(function () {
         api.ui.addFloatingPanel({
           id: MOD_ID + ".floating",
-          title: "Bahnübergang-Limit",
+          title: "Bahnübergänge",
           icon: "TrainFront",
-          defaultWidth: 320,
+          defaultWidth: 340,
           render: Panel,
         });
       });
@@ -799,17 +699,13 @@
       console.warn(`${TAG} React nicht verfügbar – Zahlenfelder werden nicht angezeigt.`);
     }
 
-    // Knopf im Escape-Menü: Werte erneut anwenden
     safeUi(function () {
       api.ui.addButton("escape-menu", {
         id: MOD_ID + ".apply",
-        label: "Bahnübergang-Limit anwenden",
+        label: "Bahnübergänge anwenden",
         onClick: function () {
           const n = applyOverrides("Manuell ausgelöst", false);
-          api.ui.showNotification(
-            `Bahnübergang-Limit angewendet (${n} Zugtypen).`,
-            "success"
-          );
+          api.ui.showNotification(`Bahnübergänge angewendet (${n} Zugtypen).`, "success");
         },
       });
     });

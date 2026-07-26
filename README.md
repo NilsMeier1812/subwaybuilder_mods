@@ -1,35 +1,42 @@
-# Bahnübergang-Limit Override — Subway Builder Mod
+# Bahnübergänge für Metro — Subway Builder Mod
 
 Mod für [Subway Builder](https://www.subwaybuilder.com) mit zwei Funktionen:
 
-1. **Limit überschreiben** — legt fest, wie viele Züge pro Stunde (tph) einen
-   ebenerdigen Bahnübergang befahren dürfen, einstellbar je Straßenklasse.
-2. **Straßenquerung freischalten** — erlaubt **Heavy Metro** und **Light Metro**,
-   Straßen ebenerdig zu kreuzen. Im Vanilla-Spiel ist das verboten.
+1. **Echte Bahnübergänge für Heavy Metro und Light Metro** — im Vanilla-Spiel
+   können nur Commuter-Rail-Gleise Straßen ebenerdig kreuzen.
+2. **Limit überschreiben** — wie viele Züge pro Stunde (tph) einen Übergang
+   befahren dürfen, einstellbar je Straßenklasse.
 
 ## Wie das im Spiel funktioniert
 
-Jeder Zugtyp hat zwei relevante Eigenschaften:
+Das Spiel führt je Zugtyp fünf Eigenschaften rund um Bahnübergänge:
 
-```js
-allowAtGradeRoadCrossing: false                                  // darf kreuzen?
-gradeCrossingTphLimit: { highway: null, major: 6, medium: 8, minor: 10 }
-```
+| Eigenschaft | Bedeutung | Commuter Rail | Heavy Metro (Vanilla) |
+| --- | --- | --- | --- |
+| `allowGradeCrossing` | **erzeugt einen echten Bahnübergang** | `true` | `false` |
+| `allowAtGradeRoadCrossing` | erlaubt das Queren der Straße überhaupt | `true` | `false` |
+| `gradeCrossingTphLimit` | Züge/Stunde je Straßenklasse | Objekt | fehlt |
+| `gradeCrossingBaseCost` | Baukosten je Übergang | `300000` | fehlt |
+| `gradeCrossingMaintenancePerDay` | laufende Kosten je Übergang | `5000` | fehlt |
 
-- `allowAtGradeRoadCrossing` (Alias `canCrossRoads`) entscheidet, ob der Zugtyp
-  Straßen überhaupt ebenerdig kreuzen darf. Bei Heavy/Light Metro steht sie auf
-  `false` — deshalb blockt das Spiel dort jeden Übergang.
-- `gradeCrossingTphLimit` ist die Obergrenze (kombinierte Fahrtrichtungen,
-  Züge/Stunde) je Straßenklasse. `null` = an dieser Straßenklasse verboten.
+Der entscheidende Punkt: Setzt man **nur** `allowAtGradeRoadCrossing`, quert das
+Gleis die Straße zwar, es entsteht aber **kein** Bahnübergang. Erst
+`allowGradeCrossing` erzeugt einen — zusammen mit den beiden Kostenfeldern, die
+Heavy/Light Metro sonst ganz fehlen.
 
-Der Mod liest beides zur Laufzeit über `api.trains.getTrainTypes()` aus und
-ersetzt es über `api.trains.modifyTrainType()`.
+Der Mod setzt alle fünf Eigenschaften über `api.trains.modifyTrainType()` und
+übernimmt die Kosten automatisch von einem Zugtyp, der im Vanilla-Spiel bereits
+Übergänge baut (Commuter Rail).
+
+Passend dazu kennt das Spiel diese Konstanten:
+`GRADE_CROSSING_SIGNAL_RADIUS` (200), `GRADE_CROSSING_APPROACH_SECONDS` (20),
+`GRADE_CROSSING_CLEAR_SECONDS` (15).
 
 ## Installation
 
 1. Mods-Ordner öffnen — im Spiel unter **Einstellungen → Mod Manager →
    „Open Mods Folder"**, oder manuell:
-   - **Windows:** `%APPDATA%\SubwayBuilder\mods\` (bzw. `metro-maker4`)
+   - **Windows:** `%APPDATA%\SubwayBuilder\mods\`
    - **macOS:** `~/Library/Application Support/SubwayBuilder/mods/`
    - **Linux:** `~/.config/SubwayBuilder/mods/`
 
@@ -45,89 +52,80 @@ ersetzt es über `api.trains.modifyTrainType()`.
    ```
 
 3. Spiel starten → **Einstellungen → Mods** → Mod aktivieren.
-   Im laufenden Spiel neu laden mit `Strg+Umschalt+R` (Mac: `Cmd+Umschalt+R`).
+
+> **Nach einem Update des Mods bitte das Spiel komplett neu starten** (nicht nur
+> `Strg+Umschalt+R`). Nur dann sieht der Mod die unverfälschten Vanilla-Werte
+> und merkt sie sich dauerhaft für „Zurücksetzen".
 
 ## Bedienung
 
-Das Bedienfeld findest du an zwei Stellen:
-
-- **Einstellungen-Menü** — als eigener Abschnitt eingebettet.
-- **Schwebendes Panel „Bahnübergang-Limit"** — frei verschiebbar.
+Das Bedienfeld gibt es im **Einstellungen-Menü** und als verschiebbares Panel
+**„Bahnübergänge"**.
 
 ### Züge pro Stunde
 
-Ein Zahlenfeld je Straßenklasse:
+Ein Zahlenfeld je Straßenklasse — leeres Feld oder `0` = an dieser
+Straßenklasse gesperrt:
 
-| Feld | Straßenklasse | Vanilla-Wert |
-| --- | --- | --- |
-| Autobahn / Schnellstraße | `highway` | gesperrt |
-| Hauptstraße | `major` | 6 |
-| Sammelstraße | `medium` | 8 |
-| Nebenstraße | `minor` | 10 |
+| Feld | Straßenklasse |
+| --- | --- |
+| Autobahn / Schnellstraße | `highway` |
+| Hauptstraße | `major` |
+| Sammelstraße | `medium` |
+| Nebenstraße | `minor` |
 
-**Leeres Feld oder `0`** = Übergang an dieser Straßenklasse gesperrt.
-In den Feldern sind nur Ziffern erlaubt.
+### Kosten je Übergang
 
-### Straßenquerung erlauben
+**Baukosten** und **Unterhalt pro Tag**. Leer lassen = automatisch die Werte von
+Commuter Rail übernehmen.
 
-- **„Heavy & Light Metro dürfen Straßen kreuzen"** — schaltet die beiden
-  Metro-Typen frei (standardmäßig **aktiv**).
-- **„Alle Zugtypen dürfen Straßen kreuzen"** — schaltet zusätzlich alle
-  übrigen Typen frei (z. B. Intercity).
+### Bahnübergänge freischalten
+
+- **„Heavy & Light Metro"** — schaltet die beiden Metro-Typen frei (Standard: an)
+- **„Alle Zugtypen"** — schaltet zusätzlich alle übrigen Typen frei
 
 ### Knöpfe
 
 - **„Anwenden"** — übernimmt alles und speichert es dauerhaft.
-- **„Zurücksetzen"** — stellt den originalen Vanilla-Zustand wieder her:
-  Limits **und** Kreuzungsverbote. Der Mod sichert sich den Originalzustand je
-  Zugtyp beim allerersten Auslesen, bevor er etwas ändert.
-- **Escape-Menü → „Bahnübergang-Limit anwenden"** — Werte erneut anwenden.
+- **„Zurücksetzen"** — stellt den originalen Vanilla-Zustand wieder her, inklusive
+  Kreuzungsverbote und Kosten.
+- **„Diagnose in Konsole"** — schreibt einen rein lesenden Bericht in die
+  Konsole (`F12`): aktueller und ursprünglicher Zustand aller Zugtypen,
+  Bahnübergangs-Konstanten und wie viele Gleise oberirdisch liegen.
+- **Escape-Menü → „Bahnübergänge anwenden"**
 
-Die Einstellungen werden über `api.storage` gespeichert und beim Spielstart
-sowie bei jedem Städtewechsel automatisch wieder angewendet.
-
-## Diagnose
-
-Der Knopf **„Diagnose in Konsole"** schreibt einen rein lesenden Bericht in die
-Entwicklerkonsole (`F12`): welche Zugtypen Kreuzungs-Eigenschaften tragen, wie
-sich die Metro-Typen von einem Vanilla-Kreuzer unterscheiden, welche
-Bahnübergangs-Konstanten das Spiel kennt, ob es eine Bahnübergangs-Kartenebene
-gibt und wie viele Gleise oberirdisch liegen. Er ändert nichts am Spielstand.
-
-Zum Kopieren in der Konsole:
-
-```js
-copy(JSON.stringify(window.__bahnuebergangDiagnose, null, 2))
-```
+Alles wird über `api.storage` gespeichert und beim Spielstart sowie bei jedem
+Städtewechsel automatisch wieder angewendet.
 
 ## Startwerte anpassen (optional)
 
-Wer die Vorgabewerte direkt im Code ändern will, findet sie oben in `index.js`:
+Oben in `index.js`:
 
 ```js
-const LIMITS = {
-  highway: null, // Autobahn (Vanilla: verboten)
-  major: 30,     // Hauptstraße (Vanilla: 6)
-  medium: 40,    // Sammelstraße (Vanilla: 8)
-  minor: 60,     // Nebenstraße (Vanilla: 10)
+const LIMITS = { highway: null, major: 30, medium: 40, minor: 60 };
+
+const COSTS = {
+  baseCost: null,          // null = von Commuter Rail übernehmen
+  maintenancePerDay: null,
 };
 
 const OPTIONS = {
-  enableMetroCrossing: true,          // Heavy + Light Metro freischalten
-  enableCrossingForAllTrains: false,  // alle Zugtypen freischalten
+  enableMetroCrossing: true,
+  enableCrossingForAllTrains: false,
 };
 
 const METRO_TRAIN_IDS = ["heavy-metro", "light-metro"];
 ```
 
-Bereits im Spiel gespeicherte Werte haben Vorrang vor diesen Startwerten.
+Im Spiel gespeicherte Werte haben Vorrang vor diesen Startwerten.
 
 ## Hinweise
 
-- Die tph-Werte gelten für **alle** kreuzenden Zugtypen gleich — die
-  individuellen Vanilla-Unterschiede zwischen z. B. S-Bahn und Tram werden
-  dabei überschrieben. „Zurücksetzen" stellt sie je Zugtyp wieder her.
-- Neu freigeschaltete Zugtypen bekommen die konfigurierten Limits; sie starten
-  also nicht mit den Vanilla-Werten anderer Zugtypen.
+- Die tph-Werte gelten für **alle** kreuzenden Zugtypen gleich, auch für
+  Commuter Rail. „Zurücksetzen" stellt die Originalwerte je Zugtyp wieder her.
+- Der Mod sichert den Vanilla-Zustand beim ersten Lauf und legt ihn unter dem
+  Speicherschlüssel `…originals.v2` ab. Wurde dabei versehentlich ein bereits
+  veränderter Zustand gesichert, hilft ein vollständiger Spiel-Neustart mit
+  deaktiviertem Mod, gefolgt von einer erneuten Aktivierung.
 - Mehr Züge über einen Übergang beeinflussen die Straßen-/Verkehrssimulation —
   genau das ist ja gewollt.
