@@ -1,25 +1,29 @@
 # Bahnübergang-Limit Override — Subway Builder Mod
 
-Überschreibt das Limit für **Züge pro Stunde (tph) an Bahnübergängen** in
-[Subway Builder](https://www.subwaybuilder.com). Standardmäßig begrenzt das
-Spiel, wie viele Züge einen ebenerdigen Straßenübergang je nach Straßenklasse
-befahren dürfen. Dieser Mod lässt dich die Werte **direkt im Spiel eingeben**.
+Mod für [Subway Builder](https://www.subwaybuilder.com) mit zwei Funktionen:
 
-## Wie das Limit im Spiel funktioniert
+1. **Limit überschreiben** — legt fest, wie viele Züge pro Stunde (tph) einen
+   ebenerdigen Bahnübergang befahren dürfen, einstellbar je Straßenklasse.
+2. **Straßenquerung freischalten** — erlaubt **Heavy Metro** und **Light Metro**,
+   Straßen ebenerdig zu kreuzen. Im Vanilla-Spiel ist das verboten.
 
-Jeder Zugtyp, der Straßen ebenerdig kreuzen darf, besitzt die Eigenschaft
-`gradeCrossingTphLimit` — eine Obergrenze (kombinierte Fahrtrichtungen,
-Züge/Stunde) je Straßenklasse:
+## Wie das im Spiel funktioniert
+
+Jeder Zugtyp hat zwei relevante Eigenschaften:
 
 ```js
+allowAtGradeRoadCrossing: false                                  // darf kreuzen?
 gradeCrossingTphLimit: { highway: null, major: 6, medium: 8, minor: 10 }
 ```
 
-- `null` = an dieser Straßenklasse ist ein ebenerdiger Übergang **verboten**
-- Zahlen = maximale Züge pro Stunde über den Übergang
+- `allowAtGradeRoadCrossing` (Alias `canCrossRoads`) entscheidet, ob der Zugtyp
+  Straßen überhaupt ebenerdig kreuzen darf. Bei Heavy/Light Metro steht sie auf
+  `false` — deshalb blockt das Spiel dort jeden Übergang.
+- `gradeCrossingTphLimit` ist die Obergrenze (kombinierte Fahrtrichtungen,
+  Züge/Stunde) je Straßenklasse. `null` = an dieser Straßenklasse verboten.
 
-Der Mod liest diese Werte zur Laufzeit über `api.trains.getTrainTypes()` aus
-und ersetzt sie über `api.trains.modifyTrainType(id, { gradeCrossingTphLimit })`.
+Der Mod liest beides zur Laufzeit über `api.trains.getTrainTypes()` aus und
+ersetzt es über `api.trains.modifyTrainType()`.
 
 ## Installation
 
@@ -45,8 +49,14 @@ und ersetzt sie über `api.trains.modifyTrainType(id, { gradeCrossingTphLimit })
 
 ## Bedienung
 
-Die Werte werden **im Spiel per Zahleneingabe** gesetzt — je ein Feld pro
-Straßenklasse:
+Das Bedienfeld findest du an zwei Stellen:
+
+- **Einstellungen-Menü** — als eigener Abschnitt eingebettet.
+- **Schwebendes Panel „Bahnübergang-Limit"** — frei verschiebbar.
+
+### Züge pro Stunde
+
+Ein Zahlenfeld je Straßenklasse:
 
 | Feld | Straßenklasse | Vanilla-Wert |
 | --- | --- | --- |
@@ -55,24 +65,26 @@ Straßenklasse:
 | Sammelstraße | `medium` | 8 |
 | Nebenstraße | `minor` | 10 |
 
-Das Eingabefeld findest du an zwei Stellen:
-
-- **Einstellungen-Menü** — dort ist der Mod als eigener Abschnitt eingebettet.
-- **Schwebendes Panel „Bahnübergang-Limit"** — frei verschiebbar.
-
-Dazu gibt es:
-
-- **„Anwenden"** — übernimmt die eingegebenen Werte und speichert sie dauerhaft.
-- **„Zurücksetzen"** — stellt die originalen Vanilla-Werte wieder her.
-- **Häkchen „Auf alle Zugtypen anwenden"** — bezieht auch Zugtypen ein, die
-  normalerweise gar keine Straßen kreuzen dürfen (z. B. reine U-Bahnen).
-- **Escape-Menü → „Bahnübergang-Limit anwenden"** — Werte erneut anwenden.
-
-**Leeres Feld oder `0`** bedeutet: Übergang an dieser Straßenklasse gesperrt.
+**Leeres Feld oder `0`** = Übergang an dieser Straßenklasse gesperrt.
 In den Feldern sind nur Ziffern erlaubt.
 
-Die Werte werden über `api.storage` gespeichert und beim Spielstart sowie bei
-jedem Städtewechsel automatisch wieder angewendet.
+### Straßenquerung erlauben
+
+- **„Heavy & Light Metro dürfen Straßen kreuzen"** — schaltet die beiden
+  Metro-Typen frei (standardmäßig **aktiv**).
+- **„Alle Zugtypen dürfen Straßen kreuzen"** — schaltet zusätzlich alle
+  übrigen Typen frei (z. B. Intercity).
+
+### Knöpfe
+
+- **„Anwenden"** — übernimmt alles und speichert es dauerhaft.
+- **„Zurücksetzen"** — stellt den originalen Vanilla-Zustand wieder her:
+  Limits **und** Kreuzungsverbote. Der Mod sichert sich den Originalzustand je
+  Zugtyp beim allerersten Auslesen, bevor er etwas ändert.
+- **Escape-Menü → „Bahnübergang-Limit anwenden"** — Werte erneut anwenden.
+
+Die Einstellungen werden über `api.storage` gespeichert und beim Spielstart
+sowie bei jedem Städtewechsel automatisch wieder angewendet.
 
 ## Startwerte anpassen (optional)
 
@@ -85,17 +97,23 @@ const LIMITS = {
   medium: 40,    // Sammelstraße (Vanilla: 8)
   minor: 60,     // Nebenstraße (Vanilla: 10)
 };
+
+const OPTIONS = {
+  enableMetroCrossing: true,          // Heavy + Light Metro freischalten
+  enableCrossingForAllTrains: false,  // alle Zugtypen freischalten
+};
+
+const METRO_TRAIN_IDS = ["heavy-metro", "light-metro"];
 ```
 
-Bereits gespeicherte Werte aus dem Spiel haben Vorrang vor diesen Startwerten.
+Bereits im Spiel gespeicherte Werte haben Vorrang vor diesen Startwerten.
 
 ## Hinweise
 
-- Der Mod ändert nur Zugtypen, die Straßen ebenerdig kreuzen dürfen
-  (`allowAtGradeRoadCrossing` bzw. vorhandenes `gradeCrossingTphLimit`), außer
-  das Häkchen „Auf alle Zugtypen anwenden" ist gesetzt.
-- Die Werte gelten für **alle** kreuzenden Zugtypen gleich — die individuellen
-  Vanilla-Unterschiede zwischen z. B. S-Bahn und Tram werden dabei überschrieben.
-  „Zurücksetzen" stellt die ursprünglichen Werte je Zugtyp wieder her.
-- Mehr Züge über einen Übergang können die Straßen-/Verkehrssimulation
-  beeinflussen — genau das ist ja gewollt.
+- Die tph-Werte gelten für **alle** kreuzenden Zugtypen gleich — die
+  individuellen Vanilla-Unterschiede zwischen z. B. S-Bahn und Tram werden
+  dabei überschrieben. „Zurücksetzen" stellt sie je Zugtyp wieder her.
+- Neu freigeschaltete Zugtypen bekommen die konfigurierten Limits; sie starten
+  also nicht mit den Vanilla-Werten anderer Zugtypen.
+- Mehr Züge über einen Übergang beeinflussen die Straßen-/Verkehrssimulation —
+  genau das ist ja gewollt.
