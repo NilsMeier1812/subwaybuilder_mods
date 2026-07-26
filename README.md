@@ -86,6 +86,20 @@ In den Feldern sind nur Ziffern erlaubt.
 Die Einstellungen werden über `api.storage` gespeichert und beim Spielstart
 sowie bei jedem Städtewechsel automatisch wieder angewendet.
 
+## Diagnose
+
+Der Knopf **„Diagnose in Konsole"** schreibt einen rein lesenden Bericht in die
+Entwicklerkonsole (`F12`): welche Zugtypen Kreuzungs-Eigenschaften tragen, wie
+sich die Metro-Typen von einem Vanilla-Kreuzer unterscheiden, welche
+Bahnübergangs-Konstanten das Spiel kennt, ob es eine Bahnübergangs-Kartenebene
+gibt und wie viele Gleise oberirdisch liegen. Er ändert nichts am Spielstand.
+
+Zum Kopieren in der Konsole:
+
+```js
+copy(JSON.stringify(window.__bahnuebergangDiagnose, null, 2))
+```
+
 ## Startwerte anpassen (optional)
 
 Wer die Vorgabewerte direkt im Code ändern will, findet sie oben in `index.js`:

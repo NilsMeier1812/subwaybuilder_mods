@@ -27,7 +27,7 @@
   "use strict";
 
   const MOD_ID = "com.nilsmeier.crossing-tph-override";
-  const MOD_VERSION = "3.1.0";
+  const MOD_VERSION = "3.2.0";
   const TAG = "[BahnübergangTPH]";
   const STORAGE_KEY = "limits";
 
@@ -54,6 +54,21 @@
 
   // Zugtypen, die per "enableMetroCrossing" freigeschaltet werden.
   const METRO_TRAIN_IDS = ["heavy-metro", "light-metro"];
+
+  // Zugtypen, die im Vanilla-Spiel Straßen kreuzen dürfen (Referenz für die
+  // Diagnose und für die Erkennung des Originalzustands).
+  const VANILLA_CROSSING_IDS = ["s-train", "regional", "tram", "commuter-rail"];
+
+  /**
+   * Bekannter Vanilla-Zustand für Zugtypen, die der Mod verändert.
+   * Nötig, weil der Mod beim Neuladen (Strg+Umschalt+R) sonst den bereits
+   * veränderten Zustand als "Original" sichern würde – dann könnte
+   * "Zurücksetzen" die echten Werte nicht mehr herstellen.
+   */
+  const VANILLA_KNOWN = {
+    "heavy-metro": { allow: false, limit: undefined },
+    "light-metro": { allow: false, limit: undefined },
+  };
 
   // Anzeigenamen der Straßenklassen für die Oberfläche
   const ROAD_LABELS = {
@@ -83,6 +98,10 @@
    * Form: { limitKey, limit, allowKey, allow, hasAliasKey }
    */
   const originals = {};
+
+  /** Aus api.storage geladene Originalwerte (überleben das Mod-Neuladen). */
+  let storedOriginals = null;
+  let newOriginalsToPersist = false;
 
   // --------------------------------------------------------------------------
   //  Hilfsfunktionen
@@ -136,23 +155,62 @@
     return Math.round(n);
   }
 
-  /** Sichert den Originalzustand eines Zugtyps genau einmal. */
+  /**
+   * Sichert den Originalzustand eines Zugtyps genau einmal.
+   *
+   * Wichtig: Beim Mod-Neuladen sind die Zugtypen eventuell schon verändert.
+   * Deshalb gilt die Reihenfolge:
+   *   1. bereits gespeicherter Originalzustand (aus api.storage)
+   *   2. bekannter Vanilla-Zustand (VANILLA_KNOWN)
+   *   3. aktueller Zustand des Zugtyps
+   */
   function captureOriginal(id, trainType) {
     if (id in originals) return originals[id];
 
     const limitKey = resolveLimitKey(trainType);
     const allowKey = resolveAllowKey(trainType);
-    const limit = trainType ? trainType[limitKey] : undefined;
+    const hasAliasKey =
+      trainType && Object.prototype.hasOwnProperty.call(trainType, "canCrossRoads");
 
+    // 1. Aus dem Speicher wiederhergestellt?
+    if (storedOriginals && storedOriginals[id]) {
+      const s = storedOriginals[id];
+      originals[id] = {
+        limitKey: s.limitKey || limitKey,
+        allowKey: s.allowKey || allowKey,
+        limit: s.limit,
+        allow: s.allow,
+        hasAliasKey: s.hasAliasKey === undefined ? hasAliasKey : s.hasAliasKey,
+        source: "storage",
+      };
+      return originals[id];
+    }
+
+    // 2. Bekannter Vanilla-Zustand für die vom Mod veränderten Zugtypen.
+    if (VANILLA_KNOWN[id]) {
+      originals[id] = {
+        limitKey: limitKey,
+        allowKey: allowKey,
+        limit: VANILLA_KNOWN[id].limit,
+        allow: VANILLA_KNOWN[id].allow,
+        hasAliasKey: hasAliasKey,
+        source: "known",
+      };
+      newOriginalsToPersist = true;
+      return originals[id];
+    }
+
+    // 3. Aktueller Zustand (unveränderter Zugtyp).
+    const limit = trainType ? trainType[limitKey] : undefined;
     originals[id] = {
       limitKey: limitKey,
       allowKey: allowKey,
       limit: isLimitObject(limit) ? Object.assign({}, limit) : limit,
       allow: trainType ? trainType[allowKey] : undefined,
-      // Manche Builds führen beide Schreibweisen – dann spiegeln wir sie.
-      hasAliasKey:
-        trainType && Object.prototype.hasOwnProperty.call(trainType, "canCrossRoads"),
+      hasAliasKey: hasAliasKey,
+      source: "live",
     };
+    newOriginalsToPersist = true;
     return originals[id];
   }
 
@@ -250,8 +308,30 @@
     }
 
     lastSummary = summary;
+    persistOriginals();
     console.log(`${TAG} ${reason}: ${changed} Zugtyp(en) angepasst.`, summary);
     return changed;
+  }
+
+  /** Schreibt neu gesicherte Originalwerte einmalig in den Speicher. */
+  function persistOriginals() {
+    if (!newOriginalsToPersist) return;
+    newOriginalsToPersist = false;
+    const merged = Object.assign({}, storedOriginals || {});
+    for (const id of Object.keys(originals)) {
+      if (!merged[id]) merged[id] = originals[id];
+    }
+    storedOriginals = merged;
+    try {
+      const p = api.storage.set(MOD_ID + ".originals", merged);
+      if (p && typeof p.catch === "function") {
+        p.catch(function (err) {
+          console.warn(`${TAG} Originalwerte konnten nicht gespeichert werden:`, err);
+        });
+      }
+    } catch (err) {
+      console.warn(`${TAG} Originalwerte konnten nicht gespeichert werden:`, err);
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -267,7 +347,15 @@
    * Rein lesend – ändert nichts am Spielstand.
    */
   function dumpDiagnostics() {
-    const out = { trainTypeDiff: {}, crossingConstants: {}, trackSample: null };
+    const out = {
+      trainTypeIds: [],
+      crossingCapableTypes: {},
+      metroVsVanillaDiff: {},
+      crossingConstants: {},
+      mapLayers: {},
+      apiCrossingEntries: [],
+      trackSample: null,
+    };
 
     let trainTypes = {};
     try {
@@ -275,40 +363,59 @@
     } catch (err) {
       console.error(`${TAG} Diagnose: Zugtypen nicht lesbar:`, err);
     }
+    out.trainTypeIds = Object.keys(trainTypes);
 
-    // Referenz = ein Zugtyp, der ursprünglich kreuzen durfte.
+    // Alle Zugtypen: welche tragen Kreuzungs-Eigenschaften?
+    for (const [id, t] of Object.entries(trainTypes)) {
+      if (!t) continue;
+      const entry = {};
+      for (const k of Object.keys(t)) {
+        if (/cross|grade|road/i.test(k)) entry[k] = t[k];
+      }
+      if (t.stats) {
+        for (const k of Object.keys(t.stats)) {
+          if (/cross|grade|road|tph/i.test(k)) entry["stats." + k] = t.stats[k];
+        }
+      }
+      out.crossingCapableTypes[id] = entry;
+    }
+
+    // Gezielt gegen einen echten Vanilla-Kreuzer vergleichen (nicht gegen
+    // einen vom Mod veränderten Zugtyp).
     let referenceId = null;
-    for (const id of Object.keys(trainTypes)) {
-      const orig = originals[id];
-      if (orig && crossedOriginally(orig)) {
-        referenceId = id;
+    for (const cand of VANILLA_CROSSING_IDS) {
+      if (trainTypes[cand]) {
+        referenceId = cand;
         break;
       }
     }
 
     if (referenceId) {
       const ref = trainTypes[referenceId];
-      const refKeys = Object.keys(ref || {});
       for (const id of METRO_TRAIN_IDS) {
         const t = trainTypes[id];
         if (!t) continue;
         const diff = {};
-        const allKeys = new Set(refKeys.concat(Object.keys(t)));
+        const allKeys = new Set(Object.keys(ref || {}).concat(Object.keys(t)));
         for (const k of allKeys) {
+          // Reine Zahlenwerte/Optik sind für Bahnübergänge irrelevant.
+          if (k === "stats" || k === "appearance" || k === "description") continue;
           const a = JSON.stringify(ref ? ref[k] : undefined);
           const b = JSON.stringify(t[k]);
           if (a !== b) diff[k] = { [referenceId]: ref ? ref[k] : undefined, [id]: t[k] };
         }
-        out.trainTypeDiff[id] = diff;
+        out.metroVsVanillaDiff[id] = diff;
       }
-      out.trainTypeDiff.__reference = referenceId;
+      out.metroVsVanillaDiff.__reference = referenceId;
     } else {
-      out.trainTypeDiff.__reference = "kein kreuzender Vanilla-Zugtyp gefunden";
+      out.metroVsVanillaDiff.__reference =
+        "kein Vanilla-Kreuzer vorhanden (gesucht: " + VANILLA_CROSSING_IDS.join(", ") + ")";
     }
 
     // Spielkonstanten nach Bahnübergangs-Einträgen durchsuchen.
     try {
       const constants = api.utils.getConstants() || {};
+      out.crossingConstants.__allKeys = Object.keys(constants);
       for (const k of Object.keys(constants)) {
         if (/cross|grade|road|tph|barrier/i.test(k)) {
           out.crossingConstants[k] = constants[k];
@@ -318,17 +425,80 @@
       console.warn(`${TAG} Diagnose: Konstanten nicht lesbar:`, err);
     }
 
+    // Kartenebenen: rendert das Spiel Bahnübergänge als eigene Ebene?
+    try {
+      const map = api.utils.getMap();
+      if (map && typeof map.getStyle === "function") {
+        const style = map.getStyle() || {};
+        const layers = style.layers || [];
+        out.mapLayers.matching = layers
+          .filter(function (l) {
+            return /cross|grade|barrier|gate|signal/i.test(l.id);
+          })
+          .map(function (l) {
+            return { id: l.id, type: l.type, source: l.source, sourceLayer: l["source-layer"] };
+          });
+        out.mapLayers.allLayerIds = layers.map(function (l) {
+          return l.id;
+        });
+        out.mapLayers.sourceIds = Object.keys(style.sources || {});
+
+        // Falls es eine Crossing-Ebene gibt: ein paar Features anschauen.
+        const first = out.mapLayers.matching[0];
+        if (first && typeof map.querySourceFeatures === "function") {
+          try {
+            const feats = map.querySourceFeatures(first.source, {
+              sourceLayer: first.sourceLayer,
+            });
+            out.mapLayers.sampleFeatures = feats.slice(0, 5).map(function (f) {
+              return f.properties;
+            });
+            out.mapLayers.featureCount = feats.length;
+          } catch (e) {
+            out.mapLayers.sampleFeatures = "nicht abfragbar: " + e.message;
+          }
+        }
+      } else {
+        out.mapLayers = "Karte nicht verfügbar";
+      }
+    } catch (err) {
+      console.warn(`${TAG} Diagnose: Karte nicht lesbar:`, err);
+    }
+
+    // Gibt es irgendwo in der API einen Bahnübergangs-Einstieg?
+    try {
+      for (const ns of Object.keys(api)) {
+        if (/cross|grade/i.test(ns)) out.apiCrossingEntries.push(ns);
+        const v = api[ns];
+        if (v && typeof v === "object") {
+          for (const fn of Object.keys(v)) {
+            if (/cross|grade/i.test(fn)) out.apiCrossingEntries.push(ns + "." + fn);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`${TAG} Diagnose: API nicht scanbar:`, err);
+    }
+
     // Ein gebautes Gleis anschauen: gibt es dort Bahnübergangs-Felder?
     try {
       const tracks = api.gameState.getTracks() || [];
       if (tracks.length) {
-        out.trackSample = { keys: Object.keys(tracks[0]), example: tracks[0] };
-        const crossingTracks = tracks.filter(function (t) {
+        // Bevorzugt ein oberirdisches Gleis zeigen (dort entstünde ein Übergang).
+        const atGrade = tracks.filter(function (t) {
+          return t.startElevation > -3 && t.startElevation < 4.5;
+        });
+        out.trackSample = {
+          totalTracks: tracks.length,
+          atGradeTracks: atGrade.length,
+          keys: Object.keys(tracks[0]),
+          atGradeExample: atGrade.length ? atGrade[0] : null,
+        };
+        out.trackSample.tracksWithCrossingFields = tracks.filter(function (t) {
           return Object.keys(t).some(function (k) {
             return /cross|grade|road/i.test(k);
           });
-        });
-        out.trackSample.tracksWithCrossingFields = crossingTracks.length;
+        }).length;
       } else {
         out.trackSample = "keine Gleise gebaut";
       }
@@ -383,6 +553,12 @@
     if (settingsPromise) return settingsPromise;
     settingsPromise = (async function () {
       try {
+        const savedOriginals = await api.storage.get(MOD_ID + ".originals", null);
+        if (savedOriginals && typeof savedOriginals === "object") {
+          storedOriginals = savedOriginals;
+          console.log(`${TAG} Originalwerte aus Speicher geladen.`);
+        }
+
         const saved = await api.storage.get(MOD_ID + "." + STORAGE_KEY, null);
         if (saved && typeof saved === "object") {
           if (saved.limits && typeof saved.limits === "object") {
