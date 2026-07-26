@@ -3,7 +3,7 @@
 Überschreibt das Limit für **Züge pro Stunde (tph) an Bahnübergängen** in
 [Subway Builder](https://www.subwaybuilder.com). Standardmäßig begrenzt das
 Spiel, wie viele Züge einen ebenerdigen Straßenübergang je nach Straßenklasse
-befahren dürfen. Dieser Mod hebt diese Grenzen an oder ganz auf.
+befahren dürfen. Dieser Mod lässt dich die Werte **direkt im Spiel eingeben**.
 
 ## Wie das Limit im Spiel funktioniert
 
@@ -23,61 +23,79 @@ und ersetzt sie über `api.trains.modifyTrainType(id, { gradeCrossingTphLimit })
 
 ## Installation
 
-1. Ordner in dein Subway-Builder-Mods-Verzeichnis kopieren (der Ordner muss
-   `manifest.json` und `index.js` enthalten).
-2. Spiel starten → **Einstellungen → Mods** → Mod aktivieren.
-3. Im laufenden Spiel neu laden mit `Strg+Umschalt+R` (Mac: `Cmd+Umschalt+R`).
+1. Mods-Ordner öffnen — im Spiel unter **Einstellungen → Mod Manager →
+   „Open Mods Folder"**, oder manuell:
+   - **Windows:** `%APPDATA%\SubwayBuilder\mods\` (bzw. `metro-maker4`)
+   - **macOS:** `~/Library/Application Support/SubwayBuilder/mods/`
+   - **Linux:** `~/.config/SubwayBuilder/mods/`
 
-## Konfiguration
+   Existiert kein `mods`-Ordner, einfach selbst anlegen.
 
-Alle Einstellungen stehen oben in `index.js` im `CONFIG`-Block:
+2. Diesen Mod-Ordner (mit `manifest.json` und `index.js`) dort hineinkopieren:
+   ```
+   mods/
+   └── subwaybuilder_mods/
+       ├── manifest.json
+       ├── index.js
+       └── README.md
+   ```
 
-| Option | Bedeutung |
-| --- | --- |
-| `mode` | `"multiply"` (Faktor), `"set"` (feste Werte) oder `"unlimited"` (praktisch unbegrenzt) |
-| `multiplier` | Faktor im Modus `"multiply"` (z. B. `3` = dreifaches Limit) |
-| `values` | Feste Grenzen je Straßenklasse im Modus `"set"` (`null` = weiterhin verboten) |
-| `unlimitedValue` | Wert im Modus `"unlimited"` (Standard `999`) |
-| `allowHighwayCrossing` | Auch an Autobahnen/Highways Übergänge erlauben (Standard: aus) |
-| `applyToAllTrains` | Auch Zugtypen anfassen, die aktuell gar nicht kreuzen dürfen |
+3. Spiel starten → **Einstellungen → Mods** → Mod aktivieren.
+   Im laufenden Spiel neu laden mit `Strg+Umschalt+R` (Mac: `Cmd+Umschalt+R`).
 
-### Beispiele
+## Bedienung
 
-**Limit verdreifachen (Standard):**
+Die Werte werden **im Spiel per Zahleneingabe** gesetzt — je ein Feld pro
+Straßenklasse:
+
+| Feld | Straßenklasse | Vanilla-Wert |
+| --- | --- | --- |
+| Autobahn / Schnellstraße | `highway` | gesperrt |
+| Hauptstraße | `major` | 6 |
+| Sammelstraße | `medium` | 8 |
+| Nebenstraße | `minor` | 10 |
+
+Das Eingabefeld findest du an zwei Stellen:
+
+- **Einstellungen-Menü** — dort ist der Mod als eigener Abschnitt eingebettet.
+- **Schwebendes Panel „Bahnübergang-Limit"** — frei verschiebbar.
+
+Dazu gibt es:
+
+- **„Anwenden"** — übernimmt die eingegebenen Werte und speichert sie dauerhaft.
+- **„Zurücksetzen"** — stellt die originalen Vanilla-Werte wieder her.
+- **Häkchen „Auf alle Zugtypen anwenden"** — bezieht auch Zugtypen ein, die
+  normalerweise gar keine Straßen kreuzen dürfen (z. B. reine U-Bahnen).
+- **Escape-Menü → „Bahnübergang-Limit anwenden"** — Werte erneut anwenden.
+
+**Leeres Feld oder `0`** bedeutet: Übergang an dieser Straßenklasse gesperrt.
+In den Feldern sind nur Ziffern erlaubt.
+
+Die Werte werden über `api.storage` gespeichert und beim Spielstart sowie bei
+jedem Städtewechsel automatisch wieder angewendet.
+
+## Startwerte anpassen (optional)
+
+Wer die Vorgabewerte direkt im Code ändern will, findet sie oben in `index.js`:
+
 ```js
-mode: "multiply",
-multiplier: 3,
+const LIMITS = {
+  highway: null, // Autobahn (Vanilla: verboten)
+  major: 30,     // Hauptstraße (Vanilla: 6)
+  medium: 40,    // Sammelstraße (Vanilla: 8)
+  minor: 60,     // Nebenstraße (Vanilla: 10)
+};
 ```
 
-**Feste Werte setzen:**
-```js
-mode: "set",
-values: { highway: null, major: 30, medium: 40, minor: 60 },
-```
-
-**Limit komplett aufheben:**
-```js
-mode: "unlimited",
-unlimitedValue: 999,
-```
-
-## Bedienung im Spiel
-
-Der Mod fügt zusätzlich Bedienelemente hinzu:
-
-- **Escape-Menü → „Bahnübergang-Limit anwenden"** — wendet die Werte erneut an
-  und zeigt eine Zusammenfassung.
-- **Einstellungen → Schieberegler „Bahnübergang-Limit ×Faktor"** — Faktor live
-  ändern.
-- **Einstellungen → Schalter „Bahnübergang-Limit aufheben"** — Limit an/aus.
-
-Die Werte werden automatisch beim Spielstart und bei jedem Städtewechsel
-angewendet.
+Bereits gespeicherte Werte aus dem Spiel haben Vorrang vor diesen Startwerten.
 
 ## Hinweise
 
 - Der Mod ändert nur Zugtypen, die Straßen ebenerdig kreuzen dürfen
   (`allowAtGradeRoadCrossing` bzw. vorhandenes `gradeCrossingTphLimit`), außer
-  `applyToAllTrains` ist aktiv.
-- Erlaubt der Mod mehr Züge über einen Übergang, kann das die Straßen-/Verkehrs-
-  simulation beeinflussen — genau das ist ja gewollt.
+  das Häkchen „Auf alle Zugtypen anwenden" ist gesetzt.
+- Die Werte gelten für **alle** kreuzenden Zugtypen gleich — die individuellen
+  Vanilla-Unterschiede zwischen z. B. S-Bahn und Tram werden dabei überschrieben.
+  „Zurücksetzen" stellt die ursprünglichen Werte je Zugtyp wieder her.
+- Mehr Züge über einen Übergang können die Straßen-/Verkehrssimulation
+  beeinflussen — genau das ist ja gewollt.
