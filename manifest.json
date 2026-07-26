@@ -2,7 +2,7 @@
   "id": "com.nilsmeier.crossing-tph-override",
   "name": "Bahnübergänge für Metro",
   "description": "Schaltet echte Bahnübergänge für Heavy Metro und Light Metro frei und überschreibt das Züge-pro-Stunde-Limit je Straßenklasse. Werte direkt im Spiel per Zahleneingabe einstellbar.",
-  "version": "4.0.0",
+  "version": "4.1.0",
   "author": {
     "name": "Nils Meier"
   },

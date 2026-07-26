@@ -26,7 +26,7 @@
   "use strict";
 
   const MOD_ID = "com.nilsmeier.crossing-tph-override";
-  const MOD_VERSION = "4.0.0";
+  const MOD_VERSION = "4.1.0";
   const TAG = "[BahnübergangTPH]";
 
   // ==========================================================================
@@ -356,7 +356,7 @@
   // --------------------------------------------------------------------------
 
   function dumpDiagnostics() {
-    const out = { trainTypes: {}, crossingConstants: {}, trackSample: null };
+    const out = { trainTypes: {}, crossingConstants: {}, trackSample: null, routes: null };
 
     let trainTypes = {};
     try {
@@ -396,6 +396,44 @@
       };
     } catch (err) {
       console.warn(`${TAG} Diagnose: Gleise nicht lesbar:`, err);
+    }
+
+    // Linien: lässt sich die Wagenzahl zur Laufzeit überhaupt anfassen?
+    // Rein lesend – es wird nichts verändert.
+    try {
+      const routes = api.gameState.getRoutes() || [];
+      const again = api.gameState.getRoutes() || [];
+      const r = routes[0];
+
+      out.routes = {
+        count: routes.length,
+        // Liefert getRoutes() dieselben Objekte (Live-Referenz) oder Kopien?
+        liveReferences: routes.length > 0 && again.length > 0 ? routes[0] === again[0] : null,
+        example: r
+          ? {
+              id: r.id,
+              bullet: r.bullet,
+              trainType: r.trainType,
+              carsPerTrain: r.carsPerTrain,
+              idealTrainCount: r.idealTrainCount,
+              trainSchedule: r.trainSchedule,
+              keys: Object.keys(r),
+              frozen: Object.isFrozen(r),
+              sealed: Object.isSealed(r),
+              // Ist carsPerTrain überhaupt beschreibbar?
+              carsPerTrainDescriptor: Object.getOwnPropertyDescriptor(r, "carsPerTrain"),
+            }
+          : "keine Linien vorhanden",
+      };
+
+      // Wagenzahl der tatsächlich fahrenden Züge je Linie.
+      const trains = api.gameState.getTrains() || [];
+      out.routes.trainCars = trains.slice(0, 10).map(function (t) {
+        return { id: t.id, routeId: t.routeId, cars: t.cars, trainType: t.trainType };
+      });
+      out.routes.totalTrains = trains.length;
+    } catch (err) {
+      console.warn(`${TAG} Diagnose: Linien nicht lesbar:`, err);
     }
 
     console.log(`${TAG} ===== DIAGNOSE BAHNÜBERGANG =====`);
