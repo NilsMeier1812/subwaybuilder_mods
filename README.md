@@ -14,6 +14,8 @@ Jeder Mod liegt in einem eigenen Unterordner und ist unabhängig von den anderen
 ```
 subwaybuilder_mods/
 ├── README.md                    ← diese Übersicht
+├── install.cmd                  ← verlinkt alle Mods (Windows)
+├── install.sh                   ← verlinkt alle Mods (macOS/Linux)
 ├── bahnuebergaenge-metro/
 │   ├── manifest.json
 │   ├── index.js
@@ -29,45 +31,84 @@ Ein Mod ist genau ein Ordner mit `manifest.json` und `index.js`. Die
 
 ## Installation
 
-1. Mods-Ordner öffnen — im Spiel unter **Einstellungen → Mod Manager →
-   „Open Mods Folder"**, oder manuell:
-   - **Windows:** `%APPDATA%\SubwayBuilder\mods\`
-   - **macOS:** `~/Library/Application Support/SubwayBuilder/mods/`
-   - **Linux:** `~/.config/SubwayBuilder/mods/`
+Der Mods-Ordner liegt hier (im Spiel: **Einstellungen → Mod Manager →
+„Open Mods Folder"**):
 
-   Existiert kein `mods`-Ordner, einfach selbst anlegen.
+- **Windows:** `%APPDATA%\SubwayBuilder\mods\`
+- **macOS:** `~/Library/Application Support/SubwayBuilder/mods/`
+- **Linux:** `~/.config/SubwayBuilder/mods/`
 
-2. **Die gewünschten Mod-Ordner** aus diesem Repo dorthin kopieren — nicht das
-   Repo selbst. Danach sieht es so aus:
+Je nach Spielversion heißt der Ordner statt `SubwayBuilder` auch `metro-maker4`.
 
-   ```
-   mods/
-   ├── bahnuebergaenge-metro/
-   │   ├── manifest.json
-   │   └── index.js
-   └── zuglaenge-nach-tageszeit/
-       ├── manifest.json
-       └── index.js
-   ```
+**Wichtig:** Das Spiel erwartet die Mods **direkt** in `mods/`, also
+`mods/<mod-name>/manifest.json`. Klont man dieses Repo einfach in den
+Mods-Ordner, liegt alles eine Ebene zu tief und das Spiel meldet einen Fehler:
 
-3. Spiel starten → **Einstellungen → Mods** → Mods aktivieren.
+```
+mods/
+└── subwaybuilder_mods/          ← so nicht: eine Ebene zu viel
+    └── bahnuebergaenge-metro/
+        └── manifest.json
+```
 
-### Bequemer: verlinken statt kopieren
+Dafür gibt es zwei saubere Lösungen.
 
-Beim Entwickeln lohnt es sich, die Ordner zu verlinken. Dann wirkt jede
-Code-Änderung sofort, ohne erneutes Kopieren.
+### Variante A: verlinken (empfohlen)
 
-**Windows** (Eingabeaufforderung als Administrator):
+Repo an einen beliebigen Ort klonen (z. B. `C:\dev\` oder `~/dev/`) und die
+mitgelieferten Skripte ausführen. Sie legen für jeden Mod-Ordner eine
+Verknüpfung im Mods-Ordner an:
+
+**Windows** — normale Eingabeaufforderung, **keine** Administratorrechte nötig
+(das Skript nutzt Verzeichnis-Junctions):
 ```cmd
-mklink /D "%APPDATA%\SubwayBuilder\mods\bahnuebergaenge-metro" "C:\Pfad\zum\repo\bahnuebergaenge-metro"
+cd C:\dev\subwaybuilder_mods
+install.cmd
 ```
 
 **macOS / Linux:**
 ```bash
-ln -s ~/pfad/zum/repo/bahnuebergaenge-metro ~/.config/SubwayBuilder/mods/bahnuebergaenge-metro
+cd ~/dev/subwaybuilder_mods
+./install.sh
 ```
 
-Im Spiel lädt `Strg+Umschalt+R` (Mac: `Cmd+Umschalt+R`) die Mods neu.
+Findet das Skript den Mods-Ordner nicht, gib ihn als Argument mit:
+`install.cmd "C:\Pfad\zu\mods"` bzw. `./install.sh /pfad/zu/mods`.
+
+Danach genügt `git pull` — die Änderungen sind sofort im Spiel, ohne erneutes
+Kopieren oder erneutes Ausführen des Skripts. Nur wenn ein **neuer** Mod-Ordner
+dazukommt, das Skript noch einmal laufen lassen.
+
+Die Skripte sind gefahrlos wiederholbar: bestehende Verknüpfungen werden
+ersetzt, echte Ordner werden nie gelöscht, sondern übersprungen.
+
+### Variante B: Repo direkt als Mods-Ordner
+
+Alternativ wird der Mods-Ordner selbst zum Repo — dann liegen die Mod-Ordner
+von vornherein an der richtigen Stelle. In einem **leeren** Mods-Ordner:
+
+```bash
+cd "<mods-ordner>"
+git clone https://github.com/NilsMeier1812/subwaybuilder_mods.git .
+```
+
+Liegen dort schon andere Mods, geht es so ohne Löschen:
+
+```bash
+cd "<mods-ordner>"
+git init
+git remote add origin https://github.com/NilsMeier1812/subwaybuilder_mods.git
+git fetch origin main
+git checkout -t origin/main
+```
+
+Aktualisiert wird dann direkt im Mods-Ordner mit `git pull`. Nachteil: fremde
+Mods im selben Ordner tauchen bei `git status` als unversionierte Dateien auf.
+
+### Danach
+
+Spiel starten → **Einstellungen → Mods** → Mods aktivieren.
+Im laufenden Spiel lädt `Strg+Umschalt+R` (Mac: `Cmd+Umschalt+R`) die Mods neu.
 
 ## Einen neuen Mod anlegen
 
@@ -87,6 +128,8 @@ Im Spiel lädt `Strg+Umschalt+R` (Mac: `Cmd+Umschalt+R`) die Mods neu.
 
 3. `index.js` schreiben. Einstieg ist immer `window.SubwayBuilderAPI`.
 4. Diese Übersicht oben in der Tabelle ergänzen.
+5. Bei Variante A einmal `install.cmd` bzw. `./install.sh` ausführen, damit der
+   neue Ordner verlinkt wird.
 
 ## Entwicklungshinweise
 
