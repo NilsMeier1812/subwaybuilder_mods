@@ -1,0 +1,10 @@
+{
+  "id": "com.nilsmeier.train-length-by-time",
+  "name": "Zuglängen nach Tageszeit",
+  "description": "Stellt die Wagenzahl je Linie abhängig von der Uhrzeit ein — z. B. 10 Wagen zur Hauptverkehrszeit und 5 Wagen nachts. Zeitfenster global oder je Linie einstellbar.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Nils Meier"
+  },
+  "main": "index.js"
+}

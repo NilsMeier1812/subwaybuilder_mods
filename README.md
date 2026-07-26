@@ -1,36 +1,31 @@
-# Bahnübergänge für Metro — Subway Builder Mod
+# Subway Builder Mods
 
-Mod für [Subway Builder](https://www.subwaybuilder.com) mit zwei Funktionen:
+Sammlung eigener Mods für [Subway Builder](https://www.subwaybuilder.com).
+Jeder Mod liegt in einem eigenen Unterordner und ist unabhängig von den anderen
+— du kannst einzeln installieren, was du brauchst.
 
-1. **Echte Bahnübergänge für Heavy Metro und Light Metro** — im Vanilla-Spiel
-   können nur Commuter-Rail-Gleise Straßen ebenerdig kreuzen.
-2. **Limit überschreiben** — wie viele Züge pro Stunde (tph) einen Übergang
-   befahren dürfen, einstellbar je Straßenklasse.
+| Mod | Was er macht |
+| --- | --- |
+| [`bahnuebergaenge-metro/`](bahnuebergaenge-metro/) | Schaltet echte Bahnübergänge für Heavy Metro und Light Metro frei und überschreibt das Züge-pro-Stunde-Limit je Straßenklasse. |
+| [`zuglaenge-nach-tageszeit/`](zuglaenge-nach-tageszeit/) | Stellt die Wagenzahl je Linie nach Uhrzeit ein — z. B. 10 Wagen zur Hauptverkehrszeit, 5 nachts. |
 
-## Wie das im Spiel funktioniert
+## Aufbau
 
-Das Spiel führt je Zugtyp fünf Eigenschaften rund um Bahnübergänge:
+```
+subwaybuilder_mods/
+├── README.md                    ← diese Übersicht
+├── bahnuebergaenge-metro/
+│   ├── manifest.json
+│   ├── index.js
+│   └── README.md
+└── zuglaenge-nach-tageszeit/
+    ├── manifest.json
+    ├── index.js
+    └── README.md
+```
 
-| Eigenschaft | Bedeutung | Commuter Rail | Heavy Metro (Vanilla) |
-| --- | --- | --- | --- |
-| `allowGradeCrossing` | **erzeugt einen echten Bahnübergang** | `true` | `false` |
-| `allowAtGradeRoadCrossing` | erlaubt das Queren der Straße überhaupt | `true` | `false` |
-| `gradeCrossingTphLimit` | Züge/Stunde je Straßenklasse | Objekt | fehlt |
-| `gradeCrossingBaseCost` | Baukosten je Übergang | `300000` | fehlt |
-| `gradeCrossingMaintenancePerDay` | laufende Kosten je Übergang | `5000` | fehlt |
-
-Der entscheidende Punkt: Setzt man **nur** `allowAtGradeRoadCrossing`, quert das
-Gleis die Straße zwar, es entsteht aber **kein** Bahnübergang. Erst
-`allowGradeCrossing` erzeugt einen — zusammen mit den beiden Kostenfeldern, die
-Heavy/Light Metro sonst ganz fehlen.
-
-Der Mod setzt alle fünf Eigenschaften über `api.trains.modifyTrainType()` und
-übernimmt die Kosten automatisch von einem Zugtyp, der im Vanilla-Spiel bereits
-Übergänge baut (Commuter Rail).
-
-Passend dazu kennt das Spiel diese Konstanten:
-`GRADE_CROSSING_SIGNAL_RADIUS` (200), `GRADE_CROSSING_APPROACH_SECONDS` (20),
-`GRADE_CROSSING_CLEAR_SECONDS` (15).
+Ein Mod ist genau ein Ordner mit `manifest.json` und `index.js`. Die
+`manifest.json` muss in diesem Ordner liegen, nicht eine Ebene darüber.
 
 ## Installation
 
@@ -42,90 +37,62 @@ Passend dazu kennt das Spiel diese Konstanten:
 
    Existiert kein `mods`-Ordner, einfach selbst anlegen.
 
-2. Diesen Mod-Ordner (mit `manifest.json` und `index.js`) dort hineinkopieren:
+2. **Die gewünschten Mod-Ordner** aus diesem Repo dorthin kopieren — nicht das
+   Repo selbst. Danach sieht es so aus:
+
    ```
    mods/
-   └── subwaybuilder_mods/
+   ├── bahnuebergaenge-metro/
+   │   ├── manifest.json
+   │   └── index.js
+   └── zuglaenge-nach-tageszeit/
        ├── manifest.json
-       ├── index.js
-       └── README.md
+       └── index.js
    ```
 
-3. Spiel starten → **Einstellungen → Mods** → Mod aktivieren.
+3. Spiel starten → **Einstellungen → Mods** → Mods aktivieren.
 
-> **Nach einem Update des Mods bitte das Spiel komplett neu starten** (nicht nur
-> `Strg+Umschalt+R`). Nur dann sieht der Mod die unverfälschten Vanilla-Werte
-> und merkt sie sich dauerhaft für „Zurücksetzen".
+### Bequemer: verlinken statt kopieren
 
-## Bedienung
+Beim Entwickeln lohnt es sich, die Ordner zu verlinken. Dann wirkt jede
+Code-Änderung sofort, ohne erneutes Kopieren.
 
-Das Bedienfeld gibt es im **Einstellungen-Menü** und als verschiebbares Panel
-**„Bahnübergänge"**.
-
-### Züge pro Stunde
-
-Ein Zahlenfeld je Straßenklasse — leeres Feld oder `0` = an dieser
-Straßenklasse gesperrt:
-
-| Feld | Straßenklasse |
-| --- | --- |
-| Autobahn / Schnellstraße | `highway` |
-| Hauptstraße | `major` |
-| Sammelstraße | `medium` |
-| Nebenstraße | `minor` |
-
-### Kosten je Übergang
-
-**Baukosten** und **Unterhalt pro Tag**. Leer lassen = automatisch die Werte von
-Commuter Rail übernehmen.
-
-### Bahnübergänge freischalten
-
-- **„Heavy & Light Metro"** — schaltet die beiden Metro-Typen frei (Standard: an)
-- **„Alle Zugtypen"** — schaltet zusätzlich alle übrigen Typen frei
-
-### Knöpfe
-
-- **„Anwenden"** — übernimmt alles und speichert es dauerhaft.
-- **„Zurücksetzen"** — stellt den originalen Vanilla-Zustand wieder her, inklusive
-  Kreuzungsverbote und Kosten.
-- **„Diagnose in Konsole"** — schreibt einen rein lesenden Bericht in die
-  Konsole (`F12`): aktueller und ursprünglicher Zustand aller Zugtypen,
-  Bahnübergangs-Konstanten und wie viele Gleise oberirdisch liegen.
-- **Escape-Menü → „Bahnübergänge anwenden"**
-
-Alles wird über `api.storage` gespeichert und beim Spielstart sowie bei jedem
-Städtewechsel automatisch wieder angewendet.
-
-## Startwerte anpassen (optional)
-
-Oben in `index.js`:
-
-```js
-const LIMITS = { highway: null, major: 30, medium: 40, minor: 60 };
-
-const COSTS = {
-  baseCost: null,          // null = von Commuter Rail übernehmen
-  maintenancePerDay: null,
-};
-
-const OPTIONS = {
-  enableMetroCrossing: true,
-  enableCrossingForAllTrains: false,
-};
-
-const METRO_TRAIN_IDS = ["heavy-metro", "light-metro"];
+**Windows** (Eingabeaufforderung als Administrator):
+```cmd
+mklink /D "%APPDATA%\SubwayBuilder\mods\bahnuebergaenge-metro" "C:\Pfad\zum\repo\bahnuebergaenge-metro"
 ```
 
-Im Spiel gespeicherte Werte haben Vorrang vor diesen Startwerten.
+**macOS / Linux:**
+```bash
+ln -s ~/pfad/zum/repo/bahnuebergaenge-metro ~/.config/SubwayBuilder/mods/bahnuebergaenge-metro
+```
 
-## Hinweise
+Im Spiel lädt `Strg+Umschalt+R` (Mac: `Cmd+Umschalt+R`) die Mods neu.
 
-- Die tph-Werte gelten für **alle** kreuzenden Zugtypen gleich, auch für
-  Commuter Rail. „Zurücksetzen" stellt die Originalwerte je Zugtyp wieder her.
-- Der Mod sichert den Vanilla-Zustand beim ersten Lauf und legt ihn unter dem
-  Speicherschlüssel `…originals.v2` ab. Wurde dabei versehentlich ein bereits
-  veränderter Zustand gesichert, hilft ein vollständiger Spiel-Neustart mit
-  deaktiviertem Mod, gefolgt von einer erneuten Aktivierung.
-- Mehr Züge über einen Übergang beeinflussen die Straßen-/Verkehrssimulation —
-  genau das ist ja gewollt.
+## Einen neuen Mod anlegen
+
+1. Neuen Ordner im Repo erstellen, z. B. `mein-neuer-mod/`.
+2. `manifest.json` hineinlegen — die `id` muss über alle Mods eindeutig sein:
+
+   ```json
+   {
+     "id": "com.nilsmeier.mein-neuer-mod",
+     "name": "Mein neuer Mod",
+     "description": "Was er macht.",
+     "version": "1.0.0",
+     "author": { "name": "Nils Meier" },
+     "main": "index.js"
+   }
+   ```
+
+3. `index.js` schreiben. Einstieg ist immer `window.SubwayBuilderAPI`.
+4. Diese Übersicht oben in der Tabelle ergänzen.
+
+## Entwicklungshinweise
+
+- Die Modding-API ist unter `window.SubwayBuilderAPI` erreichbar; Typdefinitionen
+  gibt es im [offiziellen Template](https://github.com/Subway-Builder-Modded/SubwayBuilderTemplateMod).
+- Konsole im Spiel mit `F12`. Beide Mods hier loggen mit einem eigenen Präfix
+  (`[BahnübergangTPH]`, `[Zuglängen]`).
+- `api.storage` funktioniert nur in der Desktop-Version (Electron); im Browser
+  sind Speicheraufrufe wirkungslos.
