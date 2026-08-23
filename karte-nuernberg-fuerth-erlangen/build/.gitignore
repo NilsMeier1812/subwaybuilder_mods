@@ -1,0 +1,7 @@
+# Erzeugte Kartendaten und Rohdaten gehören nicht ins Repo
+*.osm.pbf
+*.pmtiles
+*.mbtiles
+*.geojson
+*.json.gz
+NUE/

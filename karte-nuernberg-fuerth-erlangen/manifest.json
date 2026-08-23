@@ -1,0 +1,10 @@
+{
+  "id": "com.nilsmeier.karte-nuernberg",
+  "name": "Karte Nürnberg / Fürth / Erlangen",
+  "description": "Registriert die Metropolregion Nürnberg–Fürth–Erlangen (Stadtcode NUE) als spielbare Stadt. Die Kartendaten werden lokal erzeugt (siehe build/) und über einen lokalen Server bereitgestellt.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Nils Meier"
+  },
+  "main": "index.js"
+}
