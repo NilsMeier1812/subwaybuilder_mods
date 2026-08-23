@@ -8,7 +8,7 @@ Jeder Mod liegt in einem eigenen Unterordner und ist unabhängig von den anderen
 | --- | --- |
 | [`bahnuebergaenge-metro/`](bahnuebergaenge-metro/) | Schaltet echte Bahnübergänge für Heavy Metro und Light Metro frei und überschreibt das Züge-pro-Stunde-Limit je Straßenklasse. |
 | [`zuglaenge-nach-tageszeit/`](zuglaenge-nach-tageszeit/) | Stellt die Wagenzahl je Linie nach Uhrzeit ein — z. B. 10 Wagen zur Hauptverkehrszeit, 5 nachts. |
-| [`karte-nuernberg-fuerth-erlangen/`](karte-nuernberg-fuerth-erlangen/) | Eigene Karte für die Metropolregion Nürnberg–Fürth–Erlangen (Stadtcode `NUE`) — Mod-Gerüst, Build-Skript und Datenquellen-Prüfung. |
+| [`karte-nuernberg-fuerth-erlangen/`](karte-nuernberg-fuerth-erlangen/) | Eigene Karte für die Metropolregion Nürnberg–Fürth–Erlangen (Stadtcode `NUE`) — Mod, Kartenbau-Skript und komplette Nachfrage-Pipeline aus Zensus- und Pendlerdaten. |
 
 ## Aufbau
 
@@ -29,7 +29,8 @@ subwaybuilder_mods/
     ├── manifest.json
     ├── index.js
     ├── README.md
-    └── build/               ← Skripte und Datenquellen für die Kartendaten
+    ├── ANLEITUNG.md         ← was zum Bauen der Karte noch zu tun ist
+    └── build/               ← Skripte, Datenquellen und Nachfrage-Pipeline
 ```
 
 Ein Mod ist genau ein Ordner mit `manifest.json` und `index.js`. Die

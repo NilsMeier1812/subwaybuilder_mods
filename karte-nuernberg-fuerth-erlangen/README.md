@@ -3,12 +3,12 @@
 Eigene Karte für [Subway Builder](https://www.subwaybuilder.com): die
 Metropolregion Nürnberg – Fürth – Erlangen unter dem Stadtcode **NUE**.
 
-> **Stand:** Gerüst fertig, Kartendaten noch nicht gebaut. Die Datenprüfung
-> ist abgeschlossen — alles, was das Spiel verlangt, ist für die Region
-> verfügbar (Details in [`build/DATENQUELLEN.md`](build/DATENQUELLEN.md)).
-> Der eigentliche Bau muss auf einem Rechner mit Internetzugang zu Geofabrik
-> und Overture laufen; in der Cloud-Session, in der dieses Gerüst entstanden
-> ist, sind diese Hosts gesperrt.
+> **Stand:** Code fertig und getestet, Kartendaten noch nicht gebaut.
+> Was noch zu tun ist, steht Schritt für Schritt in
+> [**ANLEITUNG.md**](ANLEITUNG.md). Der Bau muss auf einem Rechner mit
+> Internetzugang zu Geofabrik, Overture und den Statistikportalen laufen —
+> in der Cloud-Session, in der dieses Projekt entstanden ist, sperrt der
+> Netzwerk-Proxy diese Hosts.
 
 ## Kartenausschnitt
 
@@ -93,34 +93,48 @@ nachjustieren und nur `add_labels()` erneut laufen lassen.
 
 ### 3. Nachfragedaten
 
-Dieser Schritt ist noch offen und der eigentliche Aufwand. `depot` kann eine
-vorhandene `demand_data.json` bearbeiten (zusammenfassen, skalieren, routen),
-erzeugt sie aber nicht aus deutschen Statistiken — die mitgelieferten Beispiele
-beruhen auf US-LODES-Daten.
+```bash
+cd build/demand
+python3 build_demand.py \
+    --zensus    ../../../daten/zensus_nue.csv \
+    --buildings ../NUE/buildings.geojson \
+    --gemeinden ../../../daten/gemeinden.geojson \
+    --jobs      ../../../daten/beschaeftigte_arbeitsort.csv \
+    --pendler   ../../../daten/pendler.csv \
+    --osrm      http://127.0.0.1:5000 \
+    --out       ../NUE/demand_data.json
+```
 
-Der Weg für Nürnberg:
+Die Pipeline liegt fertig in [`build/demand/`](build/demand/) und läuft mit
+der Python-Standardbibliothek — kein numpy, pandas, geopandas oder pyproj:
 
-1. **Wohnpunkte** aus dem Zensus-2022-100-m-Gitter — jede Zelle im BBox wird
-   zu einem Punkt mit `residents`.
-2. **Arbeitspunkte** aus den SV-Beschäftigten am Arbeitsort je Gemeinde,
-   innerhalb der Gemeinde auf Gebäude mit passender Nutzung verteilt
-   (`building=office/retail/industrial/commercial`, gewichtet nach Grundfläche).
-3. **Pendlerbeziehungen** aus dem BA-Pendleratlas als Randverteilung
-   Gemeinde → Gemeinde; innerhalb dieser Summen ein Gravitationsmodell auf die
-   Punkte.
-4. **Fahrzeiten** mit einem lokalen OSRM-Server auf demselben `.osm.pbf`:
-   `DemandData.prepare_osrm()` + `calculate_routes()`.
-5. **Sonderziele** (Flughafen, FAU, TH, Messe, Stadion, Tiergarten) über die
-   Special-Demand-Konfiguration ergänzen — Kennzahlen in
-   [`build/DATENQUELLEN.md`](build/DATENQUELLEN.md).
-6. Aufräumen: `consolidate_pops()`, `merge_identical_commutes()`,
-   `enforce_max_pop_size()`, dann `save()` als `demand_data.json`.
+1. **Einwohner** aus dem Zensus-2022-100-m-Gitter. Die Koordinaten stecken in
+   der INSPIRE-Gitter-ID (EPSG:3035); die Rückprojektion nach WGS84 rechnet
+   `nuedemand/laea.py` selbst.
+2. **Arbeitsplätze** aus den SV-Beschäftigten am Arbeitsort je Gemeinde,
+   innerhalb der Gemeinde nach Gebäudenutzung und Geschossfläche verteilt.
+3. **Pendlerbeziehungen** aus der BA-Matrix als Randverteilung, darin ein
+   Gravitationsmodell auf die Punkte. Gerundet nach Hare-Niemeyer, damit die
+   amtlichen Summen exakt erhalten bleiben.
+4. **Fahrzeiten** von einem lokalen OSRM-Server, ersatzweise geschätzt.
+5. **Sonderziele** (Flughafen, FAU, TH, Kliniken, Stadion, Messe, Tiergarten,
+   Innenstädte) aus `region.json` über `add_special_demand.py` — das nutzt
+   `depot`, damit Typ-Taxonomie und Schemadateien stimmen.
 
-Als Zwischenlösung geht auch der rein OSM-basierte Generator des
-[Map-Patchers](https://github.com/stepanskur/Subway-Builder-map-patcher) —
-so ist die Berlin-Karte entstanden. Die Datenqualität ist dann allerdings nur
-`low`, weil kein Zensus-Anker dahintersteht. Mit dem Zensus-Gitter landet
-Nürnberg in der Rubrik deutlich höher.
+Fehlen amtliche Zahlen, läuft alles trotzdem durch: dann Gravitationsmodell
+über das Gesamtgebiet und geschätzte Arbeitsplätze — schlechtere
+Datenqualität, aber ein spielbares Ergebnis.
+
+```bash
+python3 tests/test_pipeline.py     # 42 Tests, laufen ohne echte Daten
+```
+
+Getestet werden unter anderem die Projektion gegen Haversine-Distanzen, alle
+CSV-Formatvarianten des Zensus, die exakte Erhaltung der amtlichen Summen und
+ein kompletter Durchlauf auf synthetischen Daten für die Region — inklusive
+Mock-OSRM-Server.
+
+Details und Stellschrauben: [`build/demand/README.md`](build/demand/README.md)
 
 ### 4. Im Spiel testen
 
@@ -147,13 +161,21 @@ Manifest und öffnet automatisch einen PR.
 
 ```
 karte-nuernberg-fuerth-erlangen/
-├── manifest.json           Mod-Metadaten
-├── index.js                registerCity + Kachel-/Datei-URLs
-├── README.md               diese Datei
+├── manifest.json               Mod-Metadaten
+├── index.js                    registerCity + Kachel-/Datei-URLs
+├── README.md                   diese Datei
+├── ANLEITUNG.md                Schritt für Schritt: was noch zu tun ist
 └── build/
-    ├── mapgen_nue.py       erzeugt die Basiskarte mit depot
-    ├── config.json         Vorlage für den Railyard-Import
-    └── DATENQUELLEN.md     Datenprüfung mit Quellen und Lizenzen
+    ├── mapgen_nue.py           erzeugt die Basiskarte mit depot
+    ├── config.json             Vorlage für den Railyard-Import
+    ├── DATENQUELLEN.md         Datenprüfung mit Quellen und Lizenzen
+    └── demand/                 Nachfrage-Pipeline (Standardbibliothek)
+        ├── build_demand.py     Hauptskript
+        ├── verify_pois.py      Sonderziele prüfen
+        ├── add_special_demand.py
+        ├── region.json         Ausschnitt, Gemeinden, 13 Sonderziele
+        ├── nuedemand/          Module
+        └── tests/              42 Tests
 ```
 
 Die erzeugten Kartendaten (mehrere hundert MB) gehören **nicht** ins Repo.
