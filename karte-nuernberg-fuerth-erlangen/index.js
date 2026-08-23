@@ -16,6 +16,7 @@
  *     NUE.pmtiles                    Vektorkacheln (Gebäude, Straßen, Wasser, Labels)
  *     NUE_foundations.pmtiles        Fundament-Layer (Gebäudetiefen)
  *     buildings_index.json.gz        Gebäude-Index für Kollisionen
+ *       oder buildings_index.bin     (Binärvariante, siehe BUILDINGS_INDEX)
  *     roads.geojson.gz               Straßennetz
  *     runways_taxiways.geojson.gz    Start-/Rollbahnen (Flughafen Nürnberg)
  *     demand_data.json.gz            Nachfrage: Wohn-/Arbeitspunkte + Pendlerbeziehungen
@@ -43,6 +44,12 @@
 
   const CITY_CODE = "NUE"; // IATA-Code Flughafen Nürnberg
   const MAX_ZOOM = 15; // muss zum maxzoom aus mapgen_nue.py passen
+
+  // depot erzeugt den Gebäude-Index in zwei Formaten. Die offizielle Doku
+  // zeigt die gzip-JSON-Variante; die Berlin-Karte im Railyard liefert die
+  // deutlich kleinere Binärvariante aus. Lädt das Spiel die eine nicht,
+  // hier auf die andere umstellen.
+  const BUILDINGS_INDEX = "buildings_index.json.gz"; // Alternative: "buildings_index.bin"
 
   // Bounding Box der Karte: [min_lon, min_lat, max_lon, max_lat]
   // Deckt ab: Erlangen (N), Nürnberg-Katzwang/Flughafen (S), Zirndorf/Stein (W),
@@ -91,7 +98,7 @@
 
   // --- 3. Datendateien ------------------------------------------------------
   api.cities.setCityDataFiles(CITY_CODE, {
-    buildingsIndex: `${BASE_URL}/buildings_index.json.gz`,
+    buildingsIndex: `${BASE_URL}/${BUILDINGS_INDEX}`,
     demandData: `${BASE_URL}/demand_data.json.gz`,
     roads: `${BASE_URL}/roads.geojson.gz`,
     runwaysTaxiways: `${BASE_URL}/runways_taxiways.geojson.gz`,

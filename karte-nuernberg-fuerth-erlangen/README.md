@@ -44,7 +44,7 @@ api.cities.setCityDataFiles(code, {
 | --- | --- | --- |
 | `NUE.pmtiles` | Vektorkacheln: Gebäude, Straßen, Wasser, Grün, Labels | `build/mapgen_nue.py` |
 | `NUE_foundations.pmtiles` | Gebäudefundamente (Bautiefe) | `build/mapgen_nue.py` |
-| `buildings_index.json(.gz)` | Gebäudegeometrie für Kollisionen beim Tunnelbau | `build/mapgen_nue.py` |
+| `buildings_index.json(.gz)` oder `.bin` | Gebäudegeometrie für Kollisionen beim Tunnelbau — depot schreibt beide Formate, umschaltbar über `BUILDINGS_INDEX` in `index.js` | `build/mapgen_nue.py` |
 | `roads.geojson(.gz)` | Straßennetz für oberirdische Trassen | `build/mapgen_nue.py` |
 | `runways_taxiways.geojson(.gz)` | Start-/Rollbahnen Flughafen Nürnberg | `build/mapgen_nue.py` |
 | `demand_data.json(.gz)` | Wohn-/Arbeitspunkte + Pendlerbeziehungen | eigener Schritt, siehe unten |

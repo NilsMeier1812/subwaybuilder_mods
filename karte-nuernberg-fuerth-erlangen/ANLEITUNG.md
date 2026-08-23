@@ -211,7 +211,10 @@ Läuft mehrere Stunden und braucht etwa 16 GB RAM sowie 20 GB Plattenplatz.
 Ergebnis in `build/NUE/`:
 
 - `NUE.pmtiles`, `NUE_foundations.pmtiles`
-- `buildings_index.json`
+- `buildings_index.json` **und** `buildings_index.bin` — depot schreibt beide
+  Formate. Die offizielle Doku zeigt die gzip-JSON-Variante, die Berlin-Karte
+  im Railyard liefert die kleinere Binärdatei aus. Lädt das Spiel die eine
+  nicht, in `index.js` die Konstante `BUILDINGS_INDEX` umstellen.
 - `roads.geojson`
 - `runways_taxiways.geojson`
 - `buildings.geojson` (Zwischenergebnis — wird in Schritt 5 gebraucht!)
@@ -368,3 +371,4 @@ suchen. Fehlt die Zeile, wird der Mod nicht geladen; steht dort ein
 | „keine Gebäude für AGS …" | Gemeinde liegt außerhalb des Ausschnitts | ist normal, betrifft nur Randgemeinden |
 | viele „Punkte ohne Pendlerbeziehung" | `--top-k` zu klein oder Gemeindegrenzen passen nicht | `--top-k 25` probieren |
 | Stadt fehlt im Spiel | Mod nicht geladen oder Server nicht erreichbar | Spielkonsole auf `[Karte NUE]` prüfen |
+| Karte lädt, Gebäude fehlen | falsches Format des Gebäude-Index | `BUILDINGS_INDEX` in `index.js` auf `buildings_index.bin` umstellen |
