@@ -1,0 +1,46 @@
+{
+  "_hinweis": "Zusätzliche Nachfrage, die nicht in der Pendlerrechnung steckt (Fluggäste, Studierende, Besucher). Koordinaten aus OpenStreetMap (Stand der Extrakte), Kapazitäten = geschätzte Personen pro Werktag, die das Ziel erreichen. 'decay_km' = typische Anfahrtsweite.",
+  "specials": [
+    {"id": "AIR_NUE", "type": "airport", "name": "Albrecht-Dürer-Airport Nürnberg", "location": [11.0786, 49.4946],
+     "capacity": 6000, "pop_size": 60, "decay_km": 15,
+     "quelle": "rd. 4 Mio. Fluggäste/Jahr (ADV 2024) = ~11 000 Ab-/Anflüge je Tag, gut die Hälfte mit Ziel/Quelle im Kartengebiet"},
+
+    {"id": "UNI_FAUS", "type": "university", "name": "FAU Campus Erlangen-Süd (Technische Fakultät)", "location": [11.0280, 49.5738],
+     "capacity": 9000, "pop_size": 50, "decay_km": 8, "quelle": "FAU: rd. 38 000 Studierende; Technische + Naturwiss. Fakultät, geschätzte Anwesenheit"},
+    {"id": "UNI_FAUM", "type": "university", "name": "FAU Erlangen Innenstadt (Schloss, Kollegienhaus, Audimax)", "location": [11.0156, 49.6001],
+     "capacity": 9000, "pop_size": 50, "decay_km": 8, "quelle": "FAU, Philosophische + Medizinische Fakultät"},
+    {"id": "UNI_FAUN", "type": "university", "name": "FAU Nürnberg (Lange Gasse / Findelgasse)", "location": [11.0855, 49.4583],
+     "capacity": 4000, "pop_size": 40, "decay_km": 10, "quelle": "FAU Fachbereich Wirtschafts- und Sozialwissenschaften"},
+    {"id": "UNI_THN", "type": "university", "name": "Technische Hochschule Nürnberg Georg Simon Ohm", "location": [11.0950, 49.4526],
+     "capacity": 8000, "pop_size": 50, "decay_km": 10, "quelle": "TH Nürnberg: rd. 13 000 Studierende, Campus Keßlerplatz/Wassertorstraße"},
+
+    {"id": "HOS_KNN", "type": "hospital", "name": "Klinikum Nürnberg Nord", "location": [11.0605, 49.4634],
+     "capacity": 2500, "pop_size": 25, "decay_km": 8, "quelle": "Besucher und ambulante Patienten, geschätzt (Beschäftigte sind in den Arbeitsplätzen enthalten)"},
+    {"id": "HOS_KNS", "type": "hospital", "name": "Klinikum Nürnberg Süd", "location": [11.1482, 49.4114],
+     "capacity": 2500, "pop_size": 25, "decay_km": 8, "quelle": "geschätzt"},
+    {"id": "HOS_UKER", "type": "hospital", "name": "Universitätsklinikum Erlangen", "location": [11.0107, 49.6006],
+     "capacity": 3000, "pop_size": 25, "decay_km": 12, "quelle": "geschätzt"},
+    {"id": "HOS_KFUE", "type": "hospital", "name": "Klinikum Fürth", "location": [10.9747, 49.4847],
+     "capacity": 1200, "pop_size": 20, "decay_km": 6, "quelle": "geschätzt"},
+
+    {"id": "STA_MMS", "type": "stadium", "name": "Max-Morlock-Stadion / Arena", "location": [11.1257, 49.4263],
+     "capacity": 3500, "pop_size": 70, "decay_km": 15, "quelle": "50 000 Plätze, ~25 Großveranstaltungen/Jahr inkl. Arena -> Mittel je Tag"},
+    {"id": "CON_MESSE", "type": "convention_center", "name": "NürnbergMesse", "location": [11.1150, 49.4180],
+     "capacity": 4500, "pop_size": 60, "decay_km": 20, "quelle": "rd. 1,4 Mio. Besucher/Jahr an ~250 Messetagen"},
+    {"id": "ZOO_TG", "type": "zoo", "name": "Tiergarten Nürnberg", "location": [11.1448, 49.4474],
+     "capacity": 2800, "pop_size": 40, "decay_km": 12, "quelle": "rd. 1 Mio. Besucher/Jahr"},
+    {"id": "AMU_PLAY", "type": "amusement_park", "name": "Playmobil-FunPark Zirndorf", "location": [10.9434, 49.4307],
+     "capacity": 1500, "pop_size": 40, "decay_km": 15, "quelle": "rd. 0,7 Mio. Besucher/Jahr, saisonal"},
+
+    {"id": "SHP_ALTNBG", "type": "shopping_center", "name": "Nürnberger Altstadt (Hauptmarkt / Königstraße)", "location": [11.0770, 49.4527],
+     "capacity": 14000, "pop_size": 30, "decay_km": 6, "quelle": "Einkaufs- und Freizeitbesucher der Innenstadt, geschätzt"},
+    {"id": "SHP_ALTFUE", "type": "shopping_center", "name": "Fürther Innenstadt (Fürther Freiheit)", "location": [10.9900, 49.4740],
+     "capacity": 4000, "pop_size": 25, "decay_km": 4, "quelle": "geschätzt"},
+    {"id": "SHP_ALTER", "type": "shopping_center", "name": "Erlanger Innenstadt (Hauptstraße / Arcaden)", "location": [11.0045, 49.5945],
+     "capacity": 4500, "pop_size": 25, "decay_km": 5, "quelle": "geschätzt"},
+    {"id": "SHP_FC", "type": "shopping_center", "name": "Franken-Center Langwasser", "location": [11.1342, 49.4036],
+     "capacity": 3500, "pop_size": 25, "decay_km": 5, "quelle": "geschätzt"},
+    {"id": "SHP_MERC", "type": "shopping_center", "name": "Mercado Nürnberg", "location": [11.1018, 49.4695],
+     "capacity": 2000, "pop_size": 20, "decay_km": 4, "quelle": "geschätzt"}
+  ]
+}

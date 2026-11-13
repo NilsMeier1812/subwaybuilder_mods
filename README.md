@@ -8,7 +8,7 @@ Jeder Mod liegt in einem eigenen Unterordner und ist unabhängig von den anderen
 | --- | --- |
 | [`bahnuebergaenge-metro/`](bahnuebergaenge-metro/) | Schaltet echte Bahnübergänge für Heavy Metro und Light Metro frei und überschreibt das Züge-pro-Stunde-Limit je Straßenklasse. |
 | [`zuglaenge-nach-tageszeit/`](zuglaenge-nach-tageszeit/) | Stellt die Wagenzahl je Linie nach Uhrzeit ein — z. B. 10 Wagen zur Hauptverkehrszeit, 5 nachts. |
-| [`karte-nuernberg-fuerth-erlangen/`](karte-nuernberg-fuerth-erlangen/) | Eigene Karte für die Metropolregion Nürnberg–Fürth–Erlangen (Stadtcode `NUE`) — Mod, Kartenbau-Skript und komplette Nachfrage-Pipeline aus Zensus- und Pendlerdaten. |
+| [`karte-nuernberg-fuerth-erlangen/`](karte-nuernberg-fuerth-erlangen/) | **Karte** Nürnberg – Erlangen – Fürth (Stadtcode `NEF`) aus Zensus 2022 und Pendlerrechnung 2024 — fertiges Railyard-ZIP in `dist/`, komplette Bau-Pipeline in `build/`. Kein Mod: wird über Railyard importiert, nicht verlinkt. |
 
 ## Aufbau
 
@@ -25,12 +25,10 @@ subwaybuilder_mods/
 │   ├── manifest.json
 │   ├── index.js
 │   └── README.md
-└── karte-nuernberg-fuerth-erlangen/
-    ├── manifest.json
-    ├── index.js
+└── karte-nuernberg-fuerth-erlangen/   ← Karte, kein Mod (wird nicht verlinkt)
     ├── README.md
-    ├── ANLEITUNG.md         ← was zum Bauen der Karte noch zu tun ist
-    └── build/               ← Skripte, Datenquellen und Nachfrage-Pipeline
+    ├── dist/NEF-1.0.0.zip   ← fertige Karte zum Import in Railyard
+    └── build/               ← komplette Bau-Pipeline
 ```
 
 Ein Mod ist genau ein Ordner mit `manifest.json` und `index.js`. Die

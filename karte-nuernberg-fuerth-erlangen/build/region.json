@@ -1,0 +1,30 @@
+{
+  "code": "NEF",
+  "name": "Nürnberg – Erlangen – Fürth",
+  "version": "1.0.0",
+  "creator": "nilsmeier1812",
+  "country": "DE",
+  "bbox": [10.80, 49.28, 11.32, 49.66],
+  "initial_view": { "longitude": 11.0765, "latitude": 49.4480, "zoom": 12 },
+  "description": "Die Städteachse Nürnberg – Fürth – Erlangen mit Schwabach, Zirndorf, Stein, Oberasbach, Herzogenaurach, Lauf, Röthenbach, Feucht und dem Flughafen. Einwohner aus dem Zensus-2022-100-m-Gitter, Erwerbstätige und Pendlerströme aus der Pendlerrechnung der Statistischen Ämter 2024.",
+
+  "sources": {
+    "osm_extracts": [
+      "https://download.bbbike.org/osm/bbbike/Nuernberg/Nuernberg.osm.pbf",
+      "https://download.bbbike.org/osm/bbbike/Erlangen/Erlangen.osm.pbf"
+    ],
+    "osm_api_patches": [[11.265, 49.615, 11.33, 49.67]],
+    "zensus_population": "https://www.destatis.de/static/DE/zensus/gitterdaten/Zensus2022_Bevoelkerungszahl.zip",
+    "zensus_age5": "https://www.destatis.de/static/DE/zensus/gitterdaten/Alter_in_5_Altersklassen.zip",
+    "pendleratlas_year": 2024,
+    "pendleratlas_base": "https://pendleratlas.statistikportal.de/data",
+    "vg250": "https://daten.gdz.bkg.bund.de/produkte/vg/vg250_ebenen_0101/aktuell/vg250_01-01.utm32s.gpkg.ebenen.zip",
+    "overture_stac": "https://stac.overturemaps.org/catalog.json"
+  },
+
+  "labels": {
+    "cities": ["city", "town"],
+    "suburbs": ["suburb", "village"],
+    "neighborhoods": ["quarter", "neighbourhood", "hamlet"]
+  }
+}

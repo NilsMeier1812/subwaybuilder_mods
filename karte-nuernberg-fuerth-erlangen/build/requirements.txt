@@ -1,0 +1,11 @@
+geopandas>=1.1
+shapely>=2.1
+pyproj>=3.6
+pyogrio>=0.10
+pandas>=2.2
+pyarrow>=17
+numpy>=2.0
+scipy>=1.14
+duckdb>=1.1
+mapbox-vector-tile>=2.2
+mercantile>=1.2

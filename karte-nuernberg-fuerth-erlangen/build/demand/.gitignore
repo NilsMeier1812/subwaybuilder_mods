@@ -1,5 +1,0 @@
-# Laufzeit-Artefakte
-__pycache__/
-*.pyc
-fixtures/
-pois.geojson
