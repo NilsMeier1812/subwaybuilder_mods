@@ -13,7 +13,9 @@ Daten (Zensus 2022, Pendlerrechnung 2024) und OpenStreetMap/Overture.
 2. ZIP herunterladen (auf GitHub die Datei öffnen → „Download raw file“),
    dann in Railyard unter **Library → Import Assets** die Datei
    `NEF-1.0.1.zip` als Karte (Map) importieren.
-3. Spiel über Railyard starten. Die Karte steht in der Städteauswahl unter
+3. Spiel über Railyard starten (**Launch**). Beim ersten Mal im Spiel unter
+   *Einstellungen → Mods* den Mod **„Railyard Map Loader“** aktivieren und
+   das Spiel neu starten — ohne ihn erscheinen keine Railyard-Karten. Die Karte steht in der Städteauswahl unter
    dem Reiter **DE** als „Nürnberg – Erlangen – Fürth“.
 
 Der Code `NEF` kollidiert nicht mit der Community-Karte `NUE` (pierreggt);
