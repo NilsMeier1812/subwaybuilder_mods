@@ -1,7 +1,9 @@
 {
   "code": "NEF",
   "name": "Nürnberg – Erlangen – Fürth",
-  "version": "1.0.1",
+  "version": "1.1.0",
+  "_demand_factor_hinweis": "Skaliert alle Pendler und Sonderziele. 1,25 hebt die Karte von 0,54 auf ~0,68 Personen je Einwohner, den typischen Wert vergleichbarer Karten (SF offiziell ~0,59, Tokio/Prag ~0,68, Wien ~0,8).",
+  "demand_factor": 1.25,
   "creator": "nilsmeier1812",
   "country": "DE",
   "bbox": [10.80, 49.28, 11.32, 49.66],

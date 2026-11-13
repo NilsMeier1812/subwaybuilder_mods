@@ -27,7 +27,7 @@ subwaybuilder_mods/
 │   └── README.md
 └── karte-nuernberg-fuerth-erlangen/   ← Karte, kein Mod (wird nicht verlinkt)
     ├── README.md
-    ├── dist/NEF-1.0.1.zip   ← fertige Karte zum Import in Railyard
+    ├── dist/NEF-1.1.0.zip   ← fertige Karte zum Import in Railyard
     └── build/               ← komplette Bau-Pipeline
 ```
 

@@ -164,18 +164,19 @@ def add_specials(pts, pops, rng):
         w = res * np.exp(-d / s["decay_km"])
         w[d < 0.4] = 0
         w /= w.sum()
-        k = max(1, round(s["capacity"] / s["pop_size"]))
+        cap = int(round(s["capacity"] * float(REGION.get("demand_factor", 1.0))))
+        k = max(1, round(cap / s["pop_size"]))
         draws = rng.choice(len(pts), size=k, p=w)
         js = len(pts) + len(new_pts)
         o, cnt = np.unique(draws, return_counts=True)
-        sizes = hare_niemeyer(s["capacity"], cnt)
+        sizes = hare_niemeyer(cap, cnt)
         for i, sz in zip(o, sizes):
             while sz > 0:
                 part = min(sz, MAX_POP)
                 pops.append((int(i), js, int(part)))
                 sz -= part
         new_pts.append(s)
-    log(f"  Sonderziele: {len(spec)} Punkte, {sum(s['capacity'] for s in spec)} Personen")
+    log(f"  Sonderziele: {len(spec)} Punkte, {sum(int(round(s['capacity'] * float(REGION.get('demand_factor', 1.0)))) for s in spec)} Personen")
     return new_pts
 
 
@@ -228,7 +229,9 @@ def main():
     mz = [c for c in frac.index if frac[c] > 0 and c in cidx]
     fr = np.array([frac[c] for c in mz])
     ix = [cidx[c] for c in mz]
-    zone_T = T[np.ix_(ix, ix)] * fr[:, None] * fr[None, :]
+    # demand_factor: Angleichung an die Personendichte anderer Karten (region.json)
+    factor = float(REGION.get("demand_factor", 1.0))
+    zone_T = T[np.ix_(ix, ix)] * fr[:, None] * fr[None, :] * factor
     A = pd.Series(zone_T.sum(1), index=mz)      # Wohnseite im Modell
     B = pd.Series(zone_T.sum(0), index=mz)      # Arbeitsseite im Modell
     cells["E"] = cells["wa"] / cells["ARS"].map(cells.groupby("ARS")["wa"].sum()) * cells["ARS"].map(A)

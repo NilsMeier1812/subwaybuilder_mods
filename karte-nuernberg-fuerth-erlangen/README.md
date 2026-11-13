@@ -4,7 +4,7 @@ Eigene Karte für [Subway Builder](https://www.subwaybuilder.com): die
 Städteachse Nürnberg – Fürth – Erlangen samt Umland, gebaut aus amtlichen
 Daten (Zensus 2022, Pendlerrechnung 2024) und OpenStreetMap/Overture.
 
-**Fertige Karte:** [`dist/NEF-1.0.1.zip`](dist/NEF-1.0.1.zip) (74 MB)
+**Fertige Karte:** [`dist/NEF-1.1.0.zip`](dist/NEF-1.1.0.zip) (74 MB)
 
 ## Installieren
 
@@ -12,7 +12,7 @@ Daten (Zensus 2022, Pendlerrechnung 2024) und OpenStreetMap/Overture.
    Community) installieren und starten.
 2. ZIP herunterladen (auf GitHub die Datei öffnen → „Download raw file“),
    dann in Railyard unter **Library → Import Assets** die Datei
-   `NEF-1.0.1.zip` als Karte (Map) importieren.
+   `NEF-1.1.0.zip` als Karte (Map) importieren.
 3. Spiel über Railyard starten (**Launch**). Beim ersten Mal im Spiel unter
    *Einstellungen → Mods* den Mod **„Railyard Map Loader“** aktivieren und
    das Spiel neu starten — ohne ihn erscheinen keine Railyard-Karten. Die Karte steht in der Städteauswahl unter
@@ -27,19 +27,26 @@ beide können gleichzeitig installiert sein.
 | --- | --- |
 | Ausschnitt | 10,80–11,32 °O / 49,28–49,66 °N, rund 38 × 42 km |
 | Enthalten | Nürnberg, Fürth, Erlangen, Schwabach komplett; Zirndorf, Oberasbach, Stein, Herzogenaurach, Lauf, Röthenbach, Schwaig, Feucht, Wendelstein, Eckental, Heroldsberg, Cadolzburg, Roßtal u. a. — 60 Gemeinden |
-| Nachfragepunkte | 4 880 (300-m-Raster je Gemeinde, Lage = Schwerpunkt von Wohnungen und Arbeitsplätzen) |
-| Pendlergruppen | 49 042, Ø 12,7 Personen |
-| Personen gesamt | 623 460 — davon 537 960 Berufspendler, 85 500 Sonderziel-Fahrten |
+| Nachfragepunkte | 5 039 (300-m-Raster je Gemeinde, Lage = Schwerpunkt von Wohnungen und Arbeitsplätzen) |
+| Pendlergruppen | 60 673, Ø 12,8 Personen |
+| Personen gesamt | 779 325 — davon 672 450 Berufspendler, 106 875 Sonderziel-Fahrten (mit Faktor 1,25, siehe unten) |
 | Ø Arbeitsweg | 8,9 km Straße / 6,9 km Luftlinie, 15 min mit dem Auto |
 | Gebäude | 309 000 im Kollisionsindex, 380 000 in der Karte |
 | Sonderziele | Flughafen, FAU (3 Standorte), TH Nürnberg, 4 Kliniken, Stadion, Messe, Tiergarten, Playmobil-FunPark, 3 Innenstädte, 2 Einkaufszentren |
 
-Alle Kennzahlen je Gemeinde: [`dist/NEF-1.0.1-kennzahlen.json`](dist/NEF-1.0.1-kennzahlen.json).
+Alle Kennzahlen je Gemeinde: [`dist/NEF-1.1.0-kennzahlen.json`](dist/NEF-1.1.0-kennzahlen.json).
 
 Im Modell stehen nur Fahrten, deren Wohn- **und** Arbeitsort auf der Karte
 liegen (geschlossenes System, wie bei allen Subway-Builder-Karten). Wer aus
-Bamberg nach Erlangen pendelt, fehlt also — deshalb hat Erlangen im Modell
-79 000 statt 114 000 Arbeitsplätze.
+Bamberg nach Erlangen pendelt, fehlt also. Deshalb hat Erlangen im Modell
+rund 98 000 Arbeitsplätze (inkl. Faktor 1,25), in Wirklichkeit 114 000.
+
+**Faktor 1,25:** Ohne Anpassung hätte die Karte 0,54 Personen je Einwohner
+(623 000 bei 1,16 Mio. Einwohnern im Ausschnitt). Vergleichbare Karten liegen
+höher, etwa San Francisco (offiziell) bei ~0,59, Tokio und Prag (Community, sehr
+hohe Datenqualität) bei ~0,68 und Wien bei ~0,8. Deshalb werden alle Pendler und
+Sonderziele mit 1,25 multipliziert, das ergibt 0,67. Einstellbar über
+`demand_factor` in [`build/region.json`](build/region.json).
 
 ## Wie die Nachfrage entsteht
 
