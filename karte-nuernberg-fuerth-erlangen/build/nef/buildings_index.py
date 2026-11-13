@@ -112,6 +112,45 @@ def encode(buildings):
     return body
 
 
+def encode_json(buildings):
+    """Älteres JSON-Format (buildings_index.json), das Spielversionen bis 1.3.0
+    lesen und das Railyard verlangt, wenn es die Spielversion nicht erkennt.
+
+    {"cs": 0.0009, "bbox": [...], "grid": [cols, rows],
+     "cells": [[col, row, id, id, …], …],
+     "buildings": [{"b": bbox, "f": Fundamenttiefe, "p": Ringe}, …],
+     "stats": {"count": n, "maxDepth": d}}
+
+    Jedes Gebäude steht in genau einer Zelle (der seines Schwerpunkts).
+    """
+    out, cent = [], []
+    for rings, depth in buildings:
+        rr = [_r5(r) for r in rings if len(r) >= 4]
+        if not rr:
+            continue
+        ext = rr[0]
+        out.append({"b": [float(ext[:, 0].min()), float(ext[:, 1].min()),
+                          float(ext[:, 0].max()), float(ext[:, 1].max())],
+                    "f": int(depth), "p": [r.tolist() for r in rr]})
+        cent.append(ext[:-1].mean(axis=0))
+    cent = np.array(cent)
+    b = np.array([o["b"] for o in out])
+    min_lon, min_lat, max_lon, max_lat = b[:, 0].min(), b[:, 1].min(), b[:, 2].max(), b[:, 3].max()
+    cs_x = CELL / math.cos(math.radians((min_lat + max_lat) / 2))
+    cols = math.ceil((max_lon - min_lon) / cs_x)
+    rows = math.ceil((max_lat - min_lat) / CELL)
+    gx = np.clip(((cent[:, 0] - min_lon) / cs_x).astype(int), 0, cols - 1)
+    gy = np.clip(((cent[:, 1] - min_lat) / CELL).astype(int), 0, rows - 1)
+    cells = {}
+    for i, k in enumerate(zip(gx.tolist(), gy.tolist())):
+        cells.setdefault(k, []).append(i)
+    return {"cs": CELL, "bbox": [float(min_lon), float(min_lat), float(max_lon), float(max_lat)],
+            "grid": [cols + 1, rows + 1],
+            "cells": [[x, y] + ids for (x, y), ids in cells.items()],
+            "buildings": out,
+            "stats": {"count": len(out), "maxDepth": max(o["f"] for o in out)}}
+
+
 def decode(buf):
     """Liest den Index wieder ein und prüft die innere Konsistenz."""
     (magic, ver, _, _, n, cols, rows, nr, nc, ncell, nref, _,

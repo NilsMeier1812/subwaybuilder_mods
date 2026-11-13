@@ -4,7 +4,7 @@ Eigene Karte für [Subway Builder](https://www.subwaybuilder.com): die
 Städteachse Nürnberg – Fürth – Erlangen samt Umland, gebaut aus amtlichen
 Daten (Zensus 2022, Pendlerrechnung 2024) und OpenStreetMap/Overture.
 
-**Fertige Karte:** [`dist/NEF-1.0.0.zip`](dist/NEF-1.0.0.zip) (63 MB)
+**Fertige Karte:** [`dist/NEF-1.0.1.zip`](dist/NEF-1.0.1.zip) (74 MB)
 
 ## Installieren
 
@@ -12,7 +12,7 @@ Daten (Zensus 2022, Pendlerrechnung 2024) und OpenStreetMap/Overture.
    Community) installieren und starten.
 2. ZIP herunterladen (auf GitHub die Datei öffnen → „Download raw file“),
    dann in Railyard unter **Library → Import Assets** die Datei
-   `NEF-1.0.0.zip` als Karte (Map) importieren.
+   `NEF-1.0.1.zip` als Karte (Map) importieren.
 3. Spiel über Railyard starten. Die Karte steht in der Städteauswahl unter
    dem Reiter **DE** als „Nürnberg – Erlangen – Fürth“.
 
@@ -32,7 +32,7 @@ beide können gleichzeitig installiert sein.
 | Gebäude | 309 000 im Kollisionsindex, 380 000 in der Karte |
 | Sonderziele | Flughafen, FAU (3 Standorte), TH Nürnberg, 4 Kliniken, Stadion, Messe, Tiergarten, Playmobil-FunPark, 3 Innenstädte, 2 Einkaufszentren |
 
-Alle Kennzahlen je Gemeinde: [`dist/NEF-1.0.0-kennzahlen.json`](dist/NEF-1.0.0-kennzahlen.json).
+Alle Kennzahlen je Gemeinde: [`dist/NEF-1.0.1-kennzahlen.json`](dist/NEF-1.0.1-kennzahlen.json).
 
 Im Modell stehen nur Fahrten, deren Wohn- **und** Arbeitsort auf der Karte
 liegen (geschlossenes System, wie bei allen Subway-Builder-Karten). Wer aus

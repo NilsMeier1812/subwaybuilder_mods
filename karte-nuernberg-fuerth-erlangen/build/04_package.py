@@ -8,7 +8,8 @@ Integritätsprüfung des Registers erwarten (alle Dateien auf oberster Ebene):
     config.json
     NEF.pmtiles
     NEF_foundations.pmtiles
-    buildings_index.bin.gz
+    buildings_index.bin.gz   (Spielversionen > 1.3.0)
+    buildings_index.json.gz  (bis 1.3.0 bzw. wenn Railyard die Version nicht erkennt)
     demand_data.json.gz
     roads.geojson.gz
     runways_taxiways.geojson.gz
@@ -21,7 +22,7 @@ import zipfile
 from nef import buildings_index
 from nef.common import BBOX, CODE, DIST, OUT, REGION, log, read_json
 
-FILES = [f"{CODE}.pmtiles", f"{CODE}_foundations.pmtiles", "buildings_index.bin.gz",
+FILES = [f"{CODE}.pmtiles", f"{CODE}_foundations.pmtiles", "buildings_index.bin.gz", "buildings_index.json.gz",
          "demand_data.json.gz", "roads.geojson.gz", "runways_taxiways.geojson.gz"]
 
 

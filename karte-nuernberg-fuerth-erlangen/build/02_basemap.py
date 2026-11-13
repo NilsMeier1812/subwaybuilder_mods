@@ -26,7 +26,7 @@ import shapely
 from shapely.geometry import box, mapping
 
 from nef import buildings_index, tiles
-from nef.common import BBOX, CODE, MAXZOOM, OUT, RAW, REGION, TMP, log, run, utm_epsg
+from nef.common import BBOX, CODE, MAXZOOM, OUT, RAW, REGION, TMP, log, run, utm_epsg, write_json
 
 OSM = RAW / "osm" / "region.osm.pbf"
 BUILD_TMP = TMP / "basemap"
@@ -142,6 +142,10 @@ def buildings():
         f"max. Tiefe {info['maxDepth']:.0f} m, {len(buf) / 1e6:.1f} MB")
     with gzip.open(OUT / "buildings_index.bin.gz", "wb", compresslevel=9) as fh:
         fh.write(buf)
+    # Zusätzlich das JSON-Format: Railyard nimmt es, wenn es die Spielversion
+    # nicht erkennt oder sie <= 1.3.0 ist (sonst wird die Karte übersprungen).
+    write_json(OUT / "buildings_index.json.gz", buildings_index.encode_json(items), gz=True)
+    log(f"  buildings_index.json.gz: {(OUT / 'buildings_index.json.gz').stat().st_size / 1e6:.1f} MB")
 
     # Für die Kacheln: >= 25 m², auf 0.5 m vereinfacht
     tl = utm[utm["area"] >= 25].copy()
@@ -287,6 +291,10 @@ def assemble(base, bmb, fmb, lmb):
 
 
 if __name__ == "__main__":
+    import sys
+    if "--nur-gebaeude" in sys.argv:      # nur Gebäude neu (z. B. nach Formatänderung)
+        buildings()
+        raise SystemExit
     base = base_tiles()
     bmb, fmb = buildings()
     lmb = labels()
